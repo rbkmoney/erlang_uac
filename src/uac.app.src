@@ -1,0 +1,25 @@
+{application, uac, [
+    {description, "Universal authorizer"},
+    {vsn, "0.1.0"},
+    {mod, {uac, []}},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        public_key,
+        lager,
+        lager_logstash_formatter,
+        genlib,
+        jose,
+        rfc3339,
+        base64url,
+        snowflake
+    ]},
+    {env, []},
+    {modules, []},
+    {maintainers, [
+        ""
+    ]},
+    {licenses, []},
+    {links, []}
+]}.

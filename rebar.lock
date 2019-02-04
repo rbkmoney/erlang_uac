@@ -1,0 +1,28 @@
+{"1.1.0",
+[{<<"base64url">>,{pkg,<<"base64url">>,<<"0.0.1">>},0},
+ {<<"genlib">>,
+  {git,"https://github.com/rbkmoney/genlib.git",
+       {ref,"41920d7774d119c294f3aaba4043ced12da2a815"}},
+  0},
+ {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
+ {<<"jose">>,{pkg,<<"jose">>,<<"1.7.9">>},0},
+ {<<"jsx">>,{pkg,<<"jsx">>,<<"2.8.2">>},1},
+ {<<"lager">>,{pkg,<<"lager">>,<<"3.2.4">>},0},
+ {<<"lager_logstash_formatter">>,
+  {git,"git@github.com:rbkmoney/lager_logstash_formatter.git",
+       {ref,"24527c15c47749866f2d427b333fa1333a46b8af"}},
+  0},
+ {<<"rfc3339">>,{pkg,<<"rfc3339">>,<<"0.2.2">>},1},
+ {<<"snowflake">>,
+  {git,"https://github.com/rbkmoney/snowflake.git",
+       {ref,"0a598108f6582affe3b4ae550fc5b9f2062e318a"}},
+  0}]}.
+[
+{pkg_hash,[
+ {<<"base64url">>, <<"36A90125F5948E3AFD7BE97662A1504B934DD5DAC78451CA6E9ABF85A10286BE">>},
+ {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>},
+ {<<"jose">>, <<"9DC5A14AB62DB4E41677FCC97993752562FB57AD0B8BA062589682EDD3ACB91F">>},
+ {<<"jsx">>, <<"7ACC7D785B5ABE8A6E9ADBDE926A24E481F29956DD8B4DF49E3E4E7BCC92A018">>},
+ {<<"lager">>, <<"A6DEB74DAE7927F46BD13255268308EF03EB206EC784A94EAF7C1C0F3B811615">>},
+ {<<"rfc3339">>, <<"1552DF616ACA368D982E9F085A0E933B6688A3F4938A671798978EC2C0C58730">>}]}
+].
