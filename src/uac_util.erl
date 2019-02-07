@@ -1,5 +1,6 @@
 -module(uac_util).
 
+-export([issue_access_token/4]).
 -export([issue_invoice_access_token/2]).
 -export([issue_invoice_access_token/3]).
 -export([issue_invoice_template_access_token/2]).
