@@ -46,27 +46,26 @@ all() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    Apps = genlib_app:start_application_with(uac, [
-        {issuer_service, <<"test">>},
-        {accepted_services, [<<"test">>, <<"test2">>]},
-        {authorizers, #{
-            jwt => #{
-                signee => test,
-                keyset => #{
-                    test => {pem_file, get_keysource("keys/local/private.pem", Config)}
-                }
+    Apps = genlib_app:start_application(uac),
+    uac:configure(#{
+        jwt => #{
+            signee => test,
+            keyset => #{
+                test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
-        }},
-        {resource_hierarchy, #{
-            party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
-            customers           => #{bindings => #{}},
-            invoices            => #{payments => #{}},
-            payment_resources => #{}
-        }},
-        {operations, #{
-            'SomeTestOperation' => [{[test_resource], write}]
-        }}
-    ]),
+        },
+        access => #{
+            issuer_service => <<"test">>,
+            accepted_services => [<<"test">>],
+            resource_hierarchy => #{
+                party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
+                customers           => #{bindings => #{}},
+                invoices            => #{payments => #{}},
+                payment_resources => #{}
+            },
+            operations => #{}
+        }
+    }),
     [{apps, Apps}] ++ Config.
 
 -spec init_per_group(group_name(), config()) ->

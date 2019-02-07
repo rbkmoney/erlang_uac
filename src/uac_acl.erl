@@ -230,7 +230,7 @@ encode_permission(write) ->
 %%
 
 get_resource_hierarchy() ->
-    uac:get_resource_hierarchy().
+    uac_conf:get_resource_hierarchy().
 
 delve(Resource, Hierarchy) ->
     case maps:find(Resource, Hierarchy) of

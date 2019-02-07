@@ -67,64 +67,67 @@ init_per_suite(Config) ->
 -spec init_per_group(group_name(), config()) ->
     config().
 init_per_group(general_tests, Config) ->
-    Apps = genlib_app:start_application_with(uac, [
-        {issuer_service, <<"test">>},
-        {accepted_services, [<<"test">>, <<"test2">>]},
-        {authorizers, #{
-            jwt => #{
-                signee => test,
-                keyset => #{
-                    test => {pem_file, get_keysource("keys/local/private.pem", Config)}
-                }
+    Apps = genlib_app:start_application(uac),
+    uac:configure(#{
+        jwt => #{
+            signee => test,
+            keyset => #{
+                test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
-        }},
-        {resource_hierarchy, #{
-            test_resource => #{}
-        }},
-        {operations, #{
-            'SomeTestOperation' => [{[test_resource], write}]
-        }}
-    ]),
+        },
+        access => #{
+            issuer_service => <<"test">>,
+            accepted_services => [<<"test">>, <<"test2">>],
+            resource_hierarchy => #{
+                test_resource => #{}
+            },
+            operations => #{
+                'SomeTestOperation' => [{[test_resource], write}]
+            }
+        }
+    }),
     [{apps, Apps}] ++ Config;
 init_per_group(different_issuers, Config) ->
-    Apps = genlib_app:start_application_with(uac, [
-        {issuer_service, <<"test2">>},
-        {accepted_services, [<<"test">>, <<"test2">>]},
-        {authorizers, #{
-            jwt => #{
-                signee => test,
-                keyset => #{
-                    test => {pem_file, get_keysource("keys/local/private.pem", Config)}
-                }
+    Apps = genlib_app:start_application(uac),
+    uac:configure(#{
+        jwt => #{
+            signee => test,
+            keyset => #{
+                test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
-        }},
-        {resource_hierarchy, #{
-            test_resource => #{}
-        }},
-        {operations, #{
-            'SomeTestOperation' => [{[test_resource], write}]
-        }}
-    ]),
+        },
+        access => #{
+            issuer_service => <<"test2">>,
+            accepted_services => [<<"test">>, <<"test2">>],
+            resource_hierarchy => #{
+                test_resource => #{}
+            },
+            operations => #{
+                'SomeTestOperation' => [{[test_resource], write}]
+            }
+        }
+    }),
     [{apps, Apps}] ++ Config;
 init_per_group(incompatible_issuers, Config) ->
-    Apps = genlib_app:start_application_with(uac, [
-        {issuer_service, <<"test">>},
-        {accepted_services, [<<"SOME">>, <<"OTHER">>, <<"SERVICES">>]},
-        {authorizers, #{
-            jwt => #{
-                signee => test,
-                keyset => #{
-                    test => {pem_file, get_keysource("keys/local/private.pem", Config)}
-                }
+    Apps = genlib_app:start_application(uac),
+    uac:configure(#{
+        jwt => #{
+            signee => test,
+            keyset => #{
+                test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
-        }},
-        {resource_hierarchy, #{
-            test_resource => #{}
-        }},
-        {operations, #{
-            'SomeTestOperation' => [{[test_resource], write}]
-        }}
-    ]),
+        },
+        access => #{
+            issuer_service => <<"test">>,
+            accepted_services => [<<"SOME">>, <<"OTHER">>, <<"SERVICES">>],
+            resource_hierarchy => #{
+                test_resource => #{}
+            },
+            operations => #{
+                'SomeTestOperation' => [{[test_resource], write}]
+            }
+        }
+    }),
     [{apps, Apps}] ++ Config.
 
 -spec init_per_testcase(test_case_name(), config()) ->

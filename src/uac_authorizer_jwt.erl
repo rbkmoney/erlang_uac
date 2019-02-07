@@ -1,14 +1,13 @@
 -module(uac_authorizer_jwt).
 
 %%
-
--export([get_child_spec/1]).
 -export([init/1]).
+-export([get_child_spec/0]).
 
--export([store_key/2]).
 % TODO
 % Extend interface to support proper keystore manipulation
 
+-export([configure/1]).
 -export([issue/2]).
 -export([verify/1]).
 
@@ -47,6 +46,8 @@
     signee => keyname()
 }.
 
+-export_type([options/0]).
+
 -type keyset() :: #{
     keyname() => keysource()
 }.
@@ -54,15 +55,31 @@
 -type keysource() ::
     {pem_file, file:filename()}.
 
--spec get_child_spec(options()) ->
-    supervisor:child_spec() | no_return().
+-spec get_child_spec() ->
+    [supervisor:child_spec()].
 
-get_child_spec(Options) ->
-    #{
+get_child_spec() ->
+    [#{
         id => ?MODULE,
-        start => {supervisor, start_link, [?MODULE, parse_options(Options)]},
+        start => {supervisor, start_link, [?MODULE, []]},
         type => supervisor
-    }.
+    }].
+
+-spec init([]) ->
+    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+
+init([]) ->
+    ok = create_table(),
+    {ok, {#{}, []}}.
+
+%%
+
+-spec configure(options()) ->
+    ok.
+configure(Options) ->
+    {Keyset, Signee} = parse_options(Options),
+    KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
+    ok = select_signee(Signee, KeyInfos).
 
 parse_options(Options) ->
     Keyset = maps:get(keyset, Options, #{}),
@@ -80,17 +97,6 @@ is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
 is_keysource(_) ->
     false.
-
-%%
-
--spec init({keyset(), {ok, keyname()} | error}) ->
-    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
-
-init({Keyset, Signee}) ->
-    ok = create_table(),
-    KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
-    ok = select_signee(Signee, KeyInfos),
-    {ok, {#{}, []}}.
 
 ensure_store_key(Keyname, Source) ->
     case store_key(Keyname, Source) of
@@ -334,7 +340,7 @@ check_expiration(C, V) ->
 %%
 
 encode_roles(Roles) ->
-    IssuerResource = uac:get_issuer_namespace(),
+    IssuerResource = uac_conf:get_issuer_service(),
     #{
         <<"resource_access">> => #{
             IssuerResource => #{
@@ -346,7 +352,7 @@ encode_roles(Roles) ->
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
 }) when is_map(Resources) andalso Resources =/= #{} ->
-    AcceptedResources = uac:get_accepted_namespaces(),
+    AcceptedResources = uac_conf:get_accepted_services(),
     {
         get_resource_roles(Resources, AcceptedResources),
         maps:remove(<<"resource_access">>, Claims)

@@ -1,8 +1,8 @@
 {application, uac, [
     {description, "Universal authorizer"},
     {vsn, "0.1.0"},
-    {mod, {uac, []}},
     {registered, []},
+    {mod, {uac, []}},
     {applications, [
         kernel,
         stdlib,

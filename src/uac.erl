@@ -12,15 +12,17 @@
 
 %%API
 
+-export([configure/1]).
 -export([authorize_api_key/2]).
 -export([authorize_operation/3]).
 
--export([get_resource_hierarchy/0]).
--export([get_issuer_namespace/0]).
--export([get_accepted_namespaces/0]).
-
 -type context() :: uac_authorizer_jwt:t().
 -type claims()  :: uac_authorizer_jwt:claims().
+
+-type configuration() :: #{
+    jwt := uac_authorizer_jwt:options(),
+    access := uac_conf:options()
+}.
 
 -type operation_id() :: atom().
 -type api_key()      :: binary().
@@ -32,6 +34,14 @@
 %%
 % API
 %%
+
+-spec configure(configuration()) ->
+    ok.
+configure(Config) ->
+    AuthorizerConfig = maps:get(jwt, Config),
+    AccessConfig = maps:get(access, Config),
+    ok = uac_authorizer_jwt:configure(AuthorizerConfig),
+    ok = uac_conf:configure(AccessConfig).
 
 -spec authorize_api_key(
     OperationID :: operation_id(),
@@ -94,7 +104,7 @@ authorize_api_key(_OperationID, bearer, Token) ->
     ok | {error, unauthorized}.
 
 authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
-    Access = get_operation_access(OperationID, Req),
+    Access = uac_conf:get_operation_access(OperationID, Req),
     case lists:all(
         fun ({Scope, Permission}) ->
             lists:member(Permission, uac_acl:match(Scope, ACL))
@@ -106,29 +116,6 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
         false ->
             {error, unauthorized}
     end.
-
-%%
-
--spec get_operation_access(operation_id(), request_data()) ->
-    [{uac_acl:scope(), uac_acl:permission()}].
-
-get_operation_access(Op, _) ->
-    Operations = genlib_app:env(?MODULE, operations, #{}),
-    maps:get(Op, Operations).
-
--spec get_resource_hierarchy() -> #{atom() => map()}.
-
-get_resource_hierarchy() ->
-    genlib_app:env(?MODULE, resource_hierarchy, #{}).
-
--spec get_issuer_namespace() -> binary().
-get_issuer_namespace() ->
-    genlib_app:env(?MODULE, issuer_service).
-
--spec get_accepted_namespaces() -> list(binary()).
-get_accepted_namespaces() ->
-    genlib_app:env(?MODULE, accepted_services, []).
-
 
 %%
 % App
@@ -151,18 +138,8 @@ stop(_State) ->
 -spec init([]) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-    AuthorizerSpecs = get_authorizer_child_specs(),
+    AuthorizerSpec = uac_authorizer_jwt:get_child_spec(),
+    AccessSpec = uac_conf:get_child_spec(),
     SupFlags = #{},
-    Children = AuthorizerSpecs,
+    Children = AuthorizerSpec ++ AccessSpec,
     {ok, {SupFlags, Children}}.
-
-%%
-
-get_authorizer_child_specs() ->
-    Authorizers = genlib_app:env(?MODULE, authorizers, #{}),
-    [
-        get_authorizer_child_spec(jwt, maps:get(jwt, Authorizers))
-    ].
-
-get_authorizer_child_spec(jwt, Options) ->
-    uac_authorizer_jwt:get_child_spec(Options).
