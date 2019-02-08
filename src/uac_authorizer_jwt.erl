@@ -351,12 +351,10 @@ encode_roles(Roles) ->
 
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
-}) when is_map(Resources) andalso Resources =/= #{} ->
+}) when is_map(Resources) andalso map_size(Resources) > 0 ->
     AcceptedResources = uac_conf:get_accepted_services(),
-    {
-        get_resource_roles(Resources, AcceptedResources),
-        maps:remove(<<"resource_access">>, Claims)
-    };
+    Roles = get_resource_roles(Resources, AcceptedResources),
+    {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->
     throw({invalid_token, {missing, acl}}).
 

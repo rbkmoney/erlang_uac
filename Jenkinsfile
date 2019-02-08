@@ -20,26 +20,24 @@ build('erlang_uac', 'docker-host', finalHook) {
   }
 
   pipeDefault() {
-    if (!env.BRANCH_NAME.matches('^v\\d+')) {
-      runStage('compile') {
-        withGithubPrivkey {
-          sh 'make wc_compile'
-        }
+    runStage('compile') {
+      withGithubPrivkey {
+        sh 'make wc_compile'
       }
-      runStage('lint') {
-        sh 'make wc_lint'
+    }
+    runStage('lint') {
+      sh 'make wc_lint'
+    }
+    runStage('xref') {
+      sh 'make wc_xref'
+    }
+    runStage('dialyze') {
+      withWsCache("_build/default/rebar3_19.3_plt") {
+        sh 'make wc_dialyze'
       }
-      runStage('xref') {
-        sh 'make wc_xref'
-      }
-      runStage('dialyze') {
-        withWsCache("_build/default/rebar3_19.3_plt") {
-          sh 'make wc_dialyze'
-        }
-      }
-      runStage('test') {
-        sh "make wc_test"
-      }
+    }
+    runStage('test') {
+      sh "make wc_test"
     }
   }
 }

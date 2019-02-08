@@ -30,7 +30,6 @@
 -export_type([context/0]).
 -export_type([claims/0]).
 
-
 %%
 % API
 %%
