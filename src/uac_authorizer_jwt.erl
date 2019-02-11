@@ -39,6 +39,9 @@
 %%
 
 -type options() :: #{
+    %% If we want to force the token expiration check
+    %% We probably only want this when we have the means to notify clients about expiring tokens
+    force_expiration => boolean(),
     %% The set of keys used to sign issued tokens and verify signatures on such
     %% tokens.
     keyset => keyset(),
