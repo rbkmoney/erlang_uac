@@ -8,7 +8,7 @@
 % Extend interface to support proper keystore manipulation
 
 -export([configure/1]).
--export([issue/2]).
+-export([issue/3]).
 -export([verify/1]).
 
 %%
@@ -28,6 +28,7 @@
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
     unlimited.
+-type unique_id() :: binary().
 
 -export_type([t/0]).
 -export_type([subject/0]).
@@ -77,8 +78,9 @@ init([]) ->
 -spec configure(options()) ->
     ok.
 configure(Options) ->
-    {Keyset, Signee} = parse_options(Options),
+    {Keyset, Signee, ForceExpiration} = parse_options(Options),
     KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
+    ok = insert_values(#{force_expiration => ForceExpiration}),
     ok = select_signee(Signee, KeyInfos).
 
 parse_options(Options) ->
@@ -91,7 +93,8 @@ parse_options(Options) ->
         Keyset
     ),
     Signee = maps:find(signee, Options),
-    {Keyset, Signee}.
+    ForceExpiration = maps:get(force_expiration, Options),
+    {Keyset, Signee, ForceExpiration}.
 
 is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
@@ -180,25 +183,25 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(t(), expiration()) ->
+-spec issue(t(), expiration(), unique_id()) ->
     {ok, token()} |
     {error,
         nonexistent_signee
     }.
 
-issue(Auth, Expiration) ->
+issue(Auth, Expiration, JTI) ->
     case get_signee_key() of
         Key = #{} ->
-            Claims = construct_final_claims(Auth, Expiration),
+            Claims = construct_final_claims(Auth, Expiration, JTI),
             sign(Key, Claims);
         undefined ->
             {error, nonexistent_signee}
     end.
 
-construct_final_claims({{Subject, ACL}, Claims}, Expiration) ->
+construct_final_claims({{Subject, ACL}, Claims}, Expiration, JTI) ->
     maps:merge(
         Claims#{
-            <<"jti">> => unique_id(),
+            <<"jti">> => JTI,
             <<"sub">> => Subject,
             <<"exp">> => get_expires_at(Expiration)
         },
@@ -211,10 +214,6 @@ get_expires_at({deadline, Dl}) ->
     Dl;
 get_expires_at(unlimited) ->
     0.
-
-unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
 
 sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
     JWT = jose_jwt:sign(JWK, JWS#{<<"kid">> => KID}, Claims),
@@ -311,8 +310,14 @@ get_validators() ->
     [
         {token_id   , <<"jti">> , fun check_presence/2},
         {subject_id , <<"sub">> , fun check_presence/2},
-        {expires_at , <<"exp">> , fun check_expiration/2}
+        {expires_at , <<"exp">> , get_expiration_fun()}
     ].
+
+get_expiration_fun() ->
+    case get_force_expiration() of 
+        true -> fun check_expiration/2;
+        false -> fun dummy_expiration/2
+    end.
 
 check_presence(_, V) when is_binary(V) ->
     V;
@@ -325,10 +330,6 @@ check_expiration(_, Exp) when is_integer(Exp) ->
     case genlib_time:unow() of
         Now when Exp > Now ->
             Exp;
-        %% FIXME: remove as soon as posible
-        %% Remove as soon as it's possible to notify clients about expiring tokens
-        _Now when Exp > 0 ->
-            Exp;
         _ ->
             throw({invalid_token, expired})
     end;
@@ -336,6 +337,9 @@ check_expiration(C, undefined) ->
     throw({invalid_token, {missing, C}});
 check_expiration(C, V) ->
     throw({invalid_token, {badarg, {C, V}}}).
+
+dummy_expiration(_, Exp) ->
+    Exp.
 
 %%
 
@@ -375,6 +379,9 @@ get_roles_of_resource(ResourceName, Resources) ->
     Roles.
 
 %%
+
+get_force_expiration() ->
+    lookup_value(force_expiration).
 
 insert_key(Keyname, Key = #{kid := KID}) ->
     insert_values(#{

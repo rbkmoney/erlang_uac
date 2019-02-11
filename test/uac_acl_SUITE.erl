@@ -49,6 +49,7 @@ init_per_suite(Config) ->
     Apps = genlib_app:start_application(uac),
     uac:configure(#{
         jwt => #{
+            force_expiration => false,
             signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}

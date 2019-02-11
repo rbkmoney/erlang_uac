@@ -18,7 +18,7 @@
     bad_token_test/1,
     no_token_test/1,
 
-    different_issuers_test/1,
+    force_expiration_test/1,
     incompatible_issuers_test/1
 ]).
 
@@ -31,7 +31,7 @@
 all() ->
     [
         {group, general_tests},
-        {group, different_issuers},
+        {group, force_expiration},
         {group, incompatible_issuers}
     ].
 
@@ -47,9 +47,9 @@ groups() ->
                 no_token_test
             ]
         },
-        {different_issuers, [],
+        {force_expiration, [],
             [
-                different_issuers_test
+                force_expiration_test
             ]
         },
         {incompatible_issuers, [],
@@ -67,9 +67,13 @@ init_per_suite(Config) ->
 -spec init_per_group(group_name(), config()) ->
     config().
 init_per_group(general_tests, Config) ->
-    Apps = genlib_app:start_application(uac),
+    Apps = [
+        genlib_app:start_application(snowflake),
+        genlib_app:start_application(uac)
+    ],
     uac:configure(#{
         jwt => #{
+            force_expiration => false,
             signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
@@ -87,10 +91,14 @@ init_per_group(general_tests, Config) ->
         }
     }),
     [{apps, Apps}] ++ Config;
-init_per_group(different_issuers, Config) ->
-    Apps = genlib_app:start_application(uac),
+init_per_group(force_expiration, Config) ->
+    Apps = [
+        genlib_app:start_application(snowflake),
+        genlib_app:start_application(uac)
+    ],
     uac:configure(#{
         jwt => #{
+            force_expiration => true,
             signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
@@ -109,9 +117,13 @@ init_per_group(different_issuers, Config) ->
     }),
     [{apps, Apps}] ++ Config;
 init_per_group(incompatible_issuers, Config) ->
-    Apps = genlib_app:start_application(uac),
+    Apps = [
+        genlib_app:start_application(snowflake),
+        genlib_app:start_application(uac)
+    ],
     uac:configure(#{
         jwt => #{
+            force_expiration => false,
             signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
@@ -180,12 +192,11 @@ no_token_test(_) ->
 
 %%
 
--spec different_issuers_test(config()) ->
+-spec force_expiration_test(config()) ->
     _.
-different_issuers_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], write}], unlimited),
-    {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>),
-    ok = uac:authorize_operation('SomeTestOperation', <<"">>, AccessContext).
+force_expiration_test(_) ->
+    {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
+    false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>).
 
 %%
 
@@ -200,7 +211,7 @@ incompatible_issuers_test(_) ->
 issue_token(ACL, LifeTime) ->
     PartyID = <<"TEST">>,
     Claims = #{<<"TEST">> => <<"TEST">>},
-    uac_authorizer_jwt:issue({{PartyID, uac_acl:from_list(ACL)}, Claims}, LifeTime).
+    uac_authorizer_jwt:issue({{PartyID, uac_acl:from_list(ACL)}, Claims}, LifeTime, unique_id()).
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{
