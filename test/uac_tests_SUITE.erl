@@ -19,6 +19,8 @@
     no_token_test/1,
 
     force_expiration_test/1,
+    force_expiration_fail_test/1,
+
     incompatible_issuers_test/1
 ]).
 
@@ -49,7 +51,8 @@ groups() ->
         },
         {force_expiration, [],
             [
-                force_expiration_test
+                force_expiration_test,
+                force_expiration_fail_test
             ]
         },
         {incompatible_issuers, [],
@@ -195,6 +198,13 @@ no_token_test(_) ->
 -spec force_expiration_test(config()) ->
     _.
 force_expiration_test(_) ->
+    {ok, Token} = issue_token([{[test_resource], write}], {lifetime, 1000}),
+    {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>),
+    ok = uac:authorize_operation('SomeTestOperation', <<"">>, AccessContext).
+
+-spec force_expiration_fail_test(config()) ->
+    _.
+force_expiration_fail_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
     false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>).
 
