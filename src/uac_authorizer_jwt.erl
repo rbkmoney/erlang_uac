@@ -314,7 +314,7 @@ get_validators() ->
     ].
 
 get_expiration_fun() ->
-    case get_force_expiration() of 
+    case get_force_expiration() of
         true -> fun check_expiration/2;
         false -> fun dummy_expiration/2
     end.
