@@ -13,7 +13,7 @@
 %%API
 
 -export([configure/1]).
--export([authorize_api_key/2]).
+-export([authorize_api_key/3]).
 -export([authorize_operation/3]).
 
 -type context() :: uac_authorizer_jwt:t().
@@ -24,11 +24,21 @@
     access := uac_conf:options()
 }.
 
+-type verification_opts() :: #{
+    %% If we want to force the token expiration check
+    %% We probably only want this when we have the means to notify clients about expiring tokens
+    force_expiration => boolean(),
+
+    %% Current time
+    current_time := genlib_time:ts()
+}.
+
 -type operation_id() :: atom().
 -type api_key()      :: binary().
 
 -export_type([context/0]).
 -export_type([claims/0]).
+-export_type([verification_opts/0]).
 
 %%
 % API
@@ -44,13 +54,14 @@ configure(Config) ->
 
 -spec authorize_api_key(
     OperationID :: operation_id(),
-    ApiKey      :: api_key()
+    ApiKey      :: api_key(),
+    VerificationOpts :: verification_opts()
 ) -> {true, Context :: context()} | false.
 
-authorize_api_key(OperationID, ApiKey) ->
+authorize_api_key(OperationID, ApiKey, VerificationOpts) ->
     case parse_api_key(ApiKey) of
         {ok, {Type, Credentials}} ->
-            case authorize_api_key(OperationID, Type, Credentials) of
+            case authorize_api_key(OperationID, Type, Credentials, VerificationOpts) of
                 {ok, Context} ->
                     {true, Context};
                 {error, Error} ->
@@ -79,15 +90,16 @@ parse_api_key(ApiKey) ->
 -spec authorize_api_key(
     OperationID :: operation_id(),
     Type :: atom(),
-    Credentials :: binary()
+    Credentials :: binary(),
+    VerificationOpts :: verification_opts()
 ) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
-authorize_api_key(_OperationID, bearer, Token) ->
+authorize_api_key(_OperationID, bearer, Token, VerificationOpts) ->
     % NOTE
     % We are knowingly delegating actual request authorization to the logic handler
     % so we could gather more data to perform fine-grained access control.
-    uac_authorizer_jwt:verify(Token).
+    uac_authorizer_jwt:verify(Token, VerificationOpts).
 
 %%
 

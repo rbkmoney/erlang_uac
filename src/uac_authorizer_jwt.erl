@@ -9,7 +9,7 @@
 
 -export([configure/1]).
 -export([issue/3]).
--export([verify/1]).
+-export([verify/2]).
 
 %%
 
@@ -28,7 +28,7 @@
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
     unlimited.
--type unique_id() :: binary().
+-type id() :: binary().
 
 -export_type([t/0]).
 -export_type([subject/0]).
@@ -39,9 +39,6 @@
 %%
 
 -type options() :: #{
-    %% If we want to force the token expiration check
-    %% We probably only want this when we have the means to notify clients about expiring tokens
-    force_expiration => boolean(),
     %% The set of keys used to sign issued tokens and verify signatures on such
     %% tokens.
     keyset => keyset(),
@@ -81,9 +78,8 @@ init([]) ->
 -spec configure(options()) ->
     ok.
 configure(Options) ->
-    {Keyset, Signee, ForceExpiration} = parse_options(Options),
+    {Keyset, Signee} = parse_options(Options),
     KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
-    ok = insert_values(#{force_expiration => ForceExpiration}),
     ok = select_signee(Signee, KeyInfos).
 
 parse_options(Options) ->
@@ -96,8 +92,7 @@ parse_options(Options) ->
         Keyset
     ),
     Signee = maps:find(signee, Options),
-    ForceExpiration = maps:get(force_expiration, Options),
-    {Keyset, Signee, ForceExpiration}.
+    {Keyset, Signee}.
 
 is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
@@ -186,13 +181,13 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(t(), expiration(), unique_id()) ->
+-spec issue(id(), expiration(), t()) ->
     {ok, token()} |
     {error,
         nonexistent_signee
     }.
 
-issue(Auth, Expiration, JTI) ->
+issue(JTI, Expiration, Auth) ->
     case get_signee_key() of
         Key = #{} ->
             Claims = construct_final_claims(Auth, Expiration, JTI),
@@ -225,7 +220,7 @@ sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
 
 %%
 
--spec verify(token()) ->
+-spec verify(token(), uac:verification_opts()) ->
     {ok, t()} |
     {error,
         {invalid_token,
@@ -240,14 +235,14 @@ sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
         invalid_signature
     }.
 
-verify(Token) ->
+verify(Token, VerificationOpts) ->
     try
         {_, ExpandedToken} = jose_jws:expand(Token),
         #{<<"protected">> := ProtectedHeader} = ExpandedToken,
         Header = base64url_to_map(ProtectedHeader),
         Alg = get_alg(Header),
         KID = get_kid(Header),
-        verify(KID, Alg, ExpandedToken)
+        verify(KID, Alg, ExpandedToken, VerificationOpts)
     catch
         %% from get_alg and get_kid
         throw:Reason ->
@@ -261,31 +256,31 @@ verify(Token) ->
             {error, {invalid_token, Reason}}
     end.
 
-verify(KID, Alg, ExpandedToken) ->
+verify(KID, Alg, ExpandedToken, VerificationOpts) ->
     case get_key_by_kid(KID) of
         #{jwk := JWK, verifier := Algs} ->
             _ = lists:member(Alg, Algs) orelse throw(invalid_operation),
-            verify(JWK, ExpandedToken);
+            verify(JWK, ExpandedToken, VerificationOpts);
         undefined ->
             {error, {nonexistent_key, KID}}
     end.
 
-verify(JWK, ExpandedToken) ->
+verify(JWK, ExpandedToken, VerificationOpts) ->
     case jose_jwt:verify(JWK, ExpandedToken) of
         {true, #jose_jwt{fields = Claims}, _JWS} ->
-            {#{subject_id := SubjectID}, Claims1} = validate_claims(Claims),
+            {#{subject_id := SubjectID}, Claims1} = validate_claims(Claims, VerificationOpts),
             get_result(SubjectID, decode_roles(Claims1));
         {false, _JWT, _JWS} ->
             {error, invalid_signature}
     end.
 
-validate_claims(Claims) ->
-    validate_claims(Claims, get_validators(), #{}).
+validate_claims(Claims, VerificationOpts) ->
+    validate_claims(Claims, get_validators(), VerificationOpts, #{}).
 
-validate_claims(Claims, [{Name, Claim, Validator} | Rest], Acc) ->
-    V = Validator(Name, maps:get(Claim, Claims, undefined)),
-    validate_claims(maps:without([Claim], Claims), Rest, Acc#{Name => V});
-validate_claims(Claims, [], Acc) ->
+validate_claims(Claims, [{Name, Claim, Validator} | Rest], VerificationOpts, Acc) ->
+    V = Validator(Name, maps:get(Claim, Claims, undefined), VerificationOpts),
+    validate_claims(maps:without([Claim], Claims), Rest, VerificationOpts, Acc#{Name => V});
+validate_claims(Claims, [], _, Acc) ->
     {Acc, Claims}.
 
 get_result(SubjectID, {Roles, Claims}) ->
@@ -311,38 +306,36 @@ get_alg(#{}) ->
 
 get_validators() ->
     [
-        {token_id   , <<"jti">> , fun check_presence/2},
-        {subject_id , <<"sub">> , fun check_presence/2},
-        {expires_at , <<"exp">> , get_expiration_fun()}
+        {token_id   , <<"jti">> , fun check_presence/3},
+        {subject_id , <<"sub">> , fun check_presence/3},
+        {expires_at , <<"exp">> , fun check_expiration/3}
     ].
 
-get_expiration_fun() ->
-    case get_force_expiration() of
-        true -> fun check_expiration/2;
-        false -> fun dummy_expiration/2
-    end.
-
-check_presence(_, V) when is_binary(V) ->
+check_presence(_, V, _) when is_binary(V) ->
     V;
-check_presence(C, undefined) ->
+check_presence(C, undefined, _) ->
     throw({invalid_token, {missing, C}}).
 
-check_expiration(_, Exp = 0) ->
+check_expiration(_, Exp = 0, _) ->
     Exp;
-check_expiration(_, Exp) when is_integer(Exp) ->
-    case genlib_time:unow() of
-        Now when Exp > Now ->
+check_expiration(_, Exp, VOpts) when is_integer(Exp) ->
+    case get_expiration_opts(VOpts) of
+        {Now, true} when Exp > Now ->
+            Exp;
+        {_Now, false} when Exp > 0 ->
             Exp;
         _ ->
             throw({invalid_token, expired})
     end;
-check_expiration(C, undefined) ->
+check_expiration(C, undefined, _) ->
     throw({invalid_token, {missing, C}});
-check_expiration(C, V) ->
+check_expiration(C, V, _) ->
     throw({invalid_token, {badarg, {C, V}}}).
 
-dummy_expiration(_, Exp) ->
-    Exp.
+get_expiration_opts(VOpts) ->
+    CTime = maps:get(current_time, VOpts),
+    CheckExpiration = maps:get(force_expiration, VOpts, true),
+    {CTime, CheckExpiration}.
 
 %%
 
@@ -382,9 +375,6 @@ get_roles_of_resource(ResourceName, Resources) ->
     Roles.
 
 %%
-
-get_force_expiration() ->
-    lookup_value(force_expiration).
 
 insert_key(Keyname, Key = #{kid := KID}) ->
     insert_values(#{
