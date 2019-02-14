@@ -23,7 +23,7 @@
 -type claims()     :: #{binary() => term()}.
 -type subject()    :: {subject_id(), uac_acl:t()}.
 -type subject_id() :: binary().
--type t()          :: {subject(), claims()}.
+-type t()          :: {id(), subject(), claims()}.
 -type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
@@ -268,8 +268,8 @@ verify(KID, Alg, ExpandedToken, VerificationOpts) ->
 verify(JWK, ExpandedToken, VerificationOpts) ->
     case jose_jwt:verify(JWK, ExpandedToken) of
         {true, #jose_jwt{fields = Claims}, _JWS} ->
-            {#{subject_id := SubjectID}, Claims1} = validate_claims(Claims, VerificationOpts),
-            get_result(SubjectID, decode_roles(Claims1));
+            {KeyMeta, Claims1} = validate_claims(Claims, VerificationOpts),
+            get_result(KeyMeta, decode_roles(Claims1));
         {false, _JWT, _JWS} ->
             {error, invalid_signature}
     end.
@@ -283,10 +283,11 @@ validate_claims(Claims, [{Name, Claim, Validator} | Rest], VerificationOpts, Acc
 validate_claims(Claims, [], _, Acc) ->
     {Acc, Claims}.
 
-get_result(SubjectID, {Roles, Claims}) ->
+get_result(KeyMeta, {Roles, Claims}) ->
+    #{token_id := TokenID, subject_id := SubjectID} = KeyMeta,
     try
         Subject = {SubjectID, uac_acl:decode(Roles)},
-        {ok, {Subject, Claims}}
+        {ok, {TokenID, Subject, Claims}}
     catch
         error:{badarg, _} = Reason ->
             throw({invalid_token, {malformed_acl, Reason}})

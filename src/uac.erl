@@ -114,7 +114,7 @@ authorize_api_key(_OperationID, bearer, Token, VerificationOpts) ->
 ) ->
     ok | {error, unauthorized}.
 
-authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
+authorize_operation(OperationID, Req, {_, {_SubjectID, ACL}, _}) ->
     Access = uac_conf:get_operation_access(OperationID, Req),
     case lists:all(
         fun ({Scope, Permission}) ->
