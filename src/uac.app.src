@@ -7,8 +7,6 @@
         kernel,
         stdlib,
         public_key,
-        lager,
-        lager_logstash_formatter,
         genlib,
         jose,
         rfc3339,

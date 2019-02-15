@@ -13,7 +13,7 @@
 %%API
 
 -export([configure/1]).
--export([authorize_api_key/3]).
+-export([authorize_api_key/2]).
 -export([authorize_operation/2]).
 
 -type context() :: uac_authorizer_jwt:t().
@@ -53,28 +53,17 @@ configure(Config) ->
     ok = uac_conf:configure(AccessConfig).
 
 -spec authorize_api_key(
-    OperationID :: operation_id(),
     ApiKey      :: api_key(),
     VerificationOpts :: verification_opts()
-) -> {true, Context :: context()} | false.
+) -> {ok, Context :: context()} | {error, Reason :: atom()}.
 
-authorize_api_key(OperationID, ApiKey, VerificationOpts) ->
+authorize_api_key(ApiKey, VerificationOpts) ->
     case parse_api_key(ApiKey) of
         {ok, {Type, Credentials}} ->
-            case authorize_api_key(OperationID, Type, Credentials, VerificationOpts) of
-                {ok, Context} ->
-                    {true, Context};
-                {error, Error} ->
-                    _ = log_auth_error(OperationID, Error),
-                    false
-            end;
+            authorize_api_key(Type, Credentials, VerificationOpts);
         {error, Error} ->
-            _ = log_auth_error(OperationID, Error),
-            false
+            {error, Error}
     end.
-
-log_auth_error(OperationID, Error) ->
-    lager:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]).
 
 -spec parse_api_key(ApiKey :: api_key()) ->
     {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
@@ -88,14 +77,13 @@ parse_api_key(ApiKey) ->
     end.
 
 -spec authorize_api_key(
-    OperationID :: operation_id(),
     Type :: atom(),
     Credentials :: binary(),
     VerificationOpts :: verification_opts()
 ) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
-authorize_api_key(_OperationID, bearer, Token, VerificationOpts) ->
+authorize_api_key(bearer, Token, VerificationOpts) ->
     uac_authorizer_jwt:verify(Token, VerificationOpts).
 
 %%

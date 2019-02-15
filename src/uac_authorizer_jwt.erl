@@ -100,7 +100,6 @@ ensure_store_key(Keyname, Source) ->
         ok ->
             ok;
         {error, Reason} ->
-            _ = lager:error("Error importing key ~p: ~p", [Keyname, Reason]),
             exit({import_error, Keyname, Source, Reason})
     end.
 
@@ -131,55 +130,50 @@ store_key(Keyname, {pem_file, Filename}, Opts) ->
     case jose_jwk:from_pem_file(Filename) of
         JWK = #jose_jwk{} ->
             Key = construct_key(derive_kid(JWK, Opts), JWK),
-            ok = insert_key(Keyname, wrap_key_info(Key));
+            ok = insert_key(Keyname, Key);
         Error = {error, _} ->
             Error
     end.
-
-wrap_key_info(#{signer := Signer, verifier := Verifier} = Key) ->
-    #{
-        key    => Key,
-        sign   => Signer /= undefined,
-        verify => Verifier /= undefined
-    }.
 
 derive_kid(JWK, #{kid := DeriveFun}) when is_function(DeriveFun, 1) ->
     DeriveFun(JWK).
 
 construct_key(KID, JWK) ->
+    Signer = try jose_jwk:signer(JWK)   catch error:_ -> undefined end,
+    Verifier = try jose_jwk:verifier(JWK) catch error:_ -> undefined end,
     #{
-        jwk      => JWK,
-        kid      => KID,
-        signer   => try jose_jwk:signer(JWK)   catch error:_ -> undefined end,
-        verifier => try jose_jwk:verifier(JWK) catch error:_ -> undefined end
+        jwk        => JWK,
+        kid        => KID,
+        signer     => Signer,
+        can_sign   => Signer /= undefined,
+        verifier   => Verifier,
+        can_verify => Verifier /= undefined
     }.
 
 %%
 
 -spec issue(id(), expiration(), t(), keyname()) ->
     {ok, token()} |
-    {error,
-        nonexistent_key
-    }.
+    {error, nonexistent_key} |
+    {error, {invalid_signee, Reason :: atom()}}.
 
 issue(JTI, Expiration, Auth, Signee) ->
     case try_get_key_for_sign(Signee) of
-        Key when is_map(Key) ->
+        {ok, Key} ->
             Claims = construct_final_claims(Auth, Expiration, JTI),
             sign(Key, Claims);
-        undefined ->
-            {error, nonexistent_key}
+        {error, Error} ->
+            {error, Error}
     end.
 
 try_get_key_for_sign(Keyname) ->
     case get_key_by_name(Keyname) of
-        #{sign := true, key := Key} ->
-            Key;
-        #{} = KeyInfo ->
-            _ = lager:error("Error setting signee: signing with ~p is not allowed", [Keyname]),
-            exit({invalid_signee, Keyname, KeyInfo});
+        #{can_sign := true} = Key ->
+            {ok, Key};
+        #{} ->
+            {error, {invalid_signee, signing_not_allowed}};
         undefined ->
-            undefined
+            {error, nonexistent_key}
     end.
 
 construct_final_claims({{Subject, ACL}, Claims}, Expiration, JTI) ->
@@ -244,7 +238,7 @@ verify(Token, VerificationOpts) ->
 
 verify(KID, Alg, ExpandedToken, VerificationOpts) ->
     case get_key_by_kid(KID) of
-        #{key := #{jwk := JWK, verifier := Algs}} ->
+        #{jwk := JWK, verifier := Algs} ->
             _ = lists:member(Alg, Algs) orelse throw(invalid_operation),
             verify(JWK, ExpandedToken, VerificationOpts);
         undefined ->
@@ -363,10 +357,10 @@ get_roles_of_resource(ResourceName, Resources) ->
 
 %%
 
-insert_key(Keyname, Key = #{key := #{kid := KID}}) ->
+insert_key(Keyname, KeyInfo = #{kid := KID}) ->
     insert_values(#{
-        {keyname, Keyname} => Key,
-        {kid, KID}         => Key
+        {keyname, Keyname} => KeyInfo,
+        {kid, KID}         => KeyInfo
     }).
 
 get_key_by_name(Keyname) ->
@@ -379,8 +373,7 @@ base64url_to_map(Base64) when is_binary(Base64) ->
     try jsx:decode(base64url:decode(Base64), [return_maps])
     catch
         Class:Reason ->
-            _ = lager:debug("decoding base64 ~p to map failed with ~p:~p", [Base64, Class, Reason]),
-            erlang:error(badarg)
+            erlang:error({base64_decode_failed, [Base64, Class, Reason]})
     end.
 
 %%

@@ -145,40 +145,40 @@ end_per_testcase(_Name, Config) ->
     _.
 successful_auth_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], unlimited),
-    {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
     ok = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec invalid_permissions_test(config()) ->
     _.
 invalid_permissions_test(_) ->
     {ok, Token} = issue_token([{[test_resource], read}], unlimited),
-    {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
     {error, _} = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec bad_token_test(config()) ->
     _.
 bad_token_test(Config) ->
     {ok, Token} = issue_dummy_token([{[test_resource], write}], Config),
-    false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)).
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
 
 -spec no_token_test(config()) ->
     _.
 no_token_test(_) ->
     Token = <<"">>,
-    false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)).
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
 
 -spec force_expiration_test(config()) ->
     _.
 force_expiration_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
-    {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
     ok = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec force_expiration_fail_test(config()) ->
     _.
 force_expiration_fail_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
-    false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(true)).
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(true)).
 
 -spec bad_signee_test(config()) ->
     _.
@@ -193,7 +193,7 @@ bad_signee_test(_) ->
     _.
 incompatible_issuers_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], unlimited),
-    false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)).
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
 
 %%
 
