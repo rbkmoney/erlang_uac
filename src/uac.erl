@@ -14,7 +14,7 @@
 
 -export([configure/1]).
 -export([authorize_api_key/3]).
--export([authorize_operation/3]).
+-export([authorize_operation/2]).
 
 -type context() :: uac_authorizer_jwt:t().
 -type claims()  :: uac_authorizer_jwt:claims().
@@ -96,26 +96,18 @@ parse_api_key(ApiKey) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
 authorize_api_key(_OperationID, bearer, Token, VerificationOpts) ->
-    % NOTE
-    % We are knowingly delegating actual request authorization to the logic handler
-    % so we could gather more data to perform fine-grained access control.
     uac_authorizer_jwt:verify(Token, VerificationOpts).
 
 %%
 
-% TODO
-% We need shared type here, exported somewhere in swagger app
--type request_data() :: #{atom() | binary() => term()}.
-
 -spec authorize_operation(
     OperationID :: operation_id(),
-    Req :: request_data(),
     Auth :: uac_authorizer_jwt:t()
 ) ->
     ok | {error, unauthorized}.
 
-authorize_operation(OperationID, Req, {_, {_SubjectID, ACL}, _}) ->
-    Access = uac_conf:get_operation_access(OperationID, Req),
+authorize_operation(OperationID, {_, {_SubjectID, ACL}, _}) ->
+    Access = uac_conf:get_operation_access(OperationID),
     case lists:all(
         fun ({Scope, Permission}) ->
             lists:member(Permission, uac_acl:match(Scope, ACL))

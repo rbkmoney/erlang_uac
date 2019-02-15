@@ -21,6 +21,8 @@
     force_expiration_test/1,
     force_expiration_fail_test/1,
 
+    bad_signee_test/1,
+
     incompatible_issuers_test/1
 ]).
 
@@ -52,7 +54,8 @@ groups() ->
                 bad_token_test,
                 no_token_test,
                 force_expiration_test,
-                force_expiration_fail_test
+                force_expiration_fail_test,
+                bad_signee_test
             ]
         },
         {incompatible_issuers, [],
@@ -76,7 +79,6 @@ init_per_group(general_tests, Config) ->
     ],
     uac:configure(#{
         jwt => #{
-            signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
@@ -100,7 +102,6 @@ init_per_group(incompatible_issuers, Config) ->
     ],
     uac:configure(#{
         jwt => #{
-            signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
@@ -145,14 +146,14 @@ end_per_testcase(_Name, Config) ->
 successful_auth_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], unlimited),
     {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
-    ok = uac:authorize_operation('SomeTestOperation', <<"">>, AccessContext).
+    ok = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec invalid_permissions_test(config()) ->
     _.
 invalid_permissions_test(_) ->
     {ok, Token} = issue_token([{[test_resource], read}], unlimited),
     {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
-    {error, _} = uac:authorize_operation('SomeTestOperation', <<"">>, AccessContext).
+    {error, _} = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec bad_token_test(config()) ->
     _.
@@ -171,13 +172,20 @@ no_token_test(_) ->
 force_expiration_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
     {true, AccessContext} = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(false)),
-    ok = uac:authorize_operation('SomeTestOperation', <<"">>, AccessContext).
+    ok = uac:authorize_operation('SomeTestOperation', AccessContext).
 
 -spec force_expiration_fail_test(config()) ->
     _.
 force_expiration_fail_test(_) ->
     {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
     false = uac:authorize_api_key('SomeTestOperation', <<"Bearer ", Token/binary>>, ?vopts(true)).
+
+-spec bad_signee_test(config()) ->
+    _.
+bad_signee_test(_) ->
+    ACL = [{[test_resource], write}],
+    {error, nonexistent_key} =
+        uac_authorizer_jwt:issue(unique_id(), unlimited, {{<<"TEST">>, uac_acl:from_list(ACL)}, #{}}, random).
 
 %%
 
@@ -192,7 +200,7 @@ incompatible_issuers_test(_) ->
 issue_token(ACL, LifeTime) ->
     PartyID = <<"TEST">>,
     Claims = #{<<"TEST">> => <<"TEST">>},
-    uac_authorizer_jwt:issue(unique_id(), LifeTime, {{PartyID, uac_acl:from_list(ACL)}, Claims}).
+    uac_authorizer_jwt:issue(unique_id(), LifeTime, {{PartyID, uac_acl:from_list(ACL)}, Claims}, test).
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{

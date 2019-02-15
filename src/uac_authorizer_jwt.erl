@@ -8,7 +8,7 @@
 % Extend interface to support proper keystore manipulation
 
 -export([configure/1]).
--export([issue/3]).
+-export([issue/4]).
 -export([verify/2]).
 
 %%
@@ -41,10 +41,7 @@
 -type options() :: #{
     %% The set of keys used to sign issued tokens and verify signatures on such
     %% tokens.
-    keyset => keyset(),
-    %% The name of a key used exclusively to sign any issued token.
-    %% If not set any token issue is destined to fail.
-    signee => keyname()
+    keyset => keyset()
 }.
 
 -export_type([options/0]).
@@ -78,9 +75,9 @@ init([]) ->
 -spec configure(options()) ->
     ok.
 configure(Options) ->
-    {Keyset, Signee} = parse_options(Options),
-    KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
-    ok = select_signee(Signee, KeyInfos).
+    Keyset = parse_options(Options),
+    _ = maps:map(fun ensure_store_key/2, Keyset),
+    ok.
 
 parse_options(Options) ->
     Keyset = maps:get(keyset, Options, #{}),
@@ -91,8 +88,7 @@ parse_options(Options) ->
         end,
         Keyset
     ),
-    Signee = maps:find(signee, Options),
-    {Keyset, Signee}.
+    Keyset.
 
 is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
@@ -101,37 +97,17 @@ is_keysource(_) ->
 
 ensure_store_key(Keyname, Source) ->
     case store_key(Keyname, Source) of
-        {ok, KeyInfo} ->
-            KeyInfo;
+        ok ->
+            ok;
         {error, Reason} ->
             _ = lager:error("Error importing key ~p: ~p", [Keyname, Reason]),
             exit({import_error, Keyname, Source, Reason})
     end.
 
-select_signee({ok, Keyname}, KeyInfos) ->
-    case maps:find(Keyname, KeyInfos) of
-        {ok, #{sign := true}} ->
-            set_signee(Keyname);
-        {ok, KeyInfo} ->
-            _ = lager:error("Error setting signee: signing with ~p is not allowed", [Keyname]),
-            exit({invalid_signee, Keyname, KeyInfo});
-        error ->
-            _ = lager:error("Error setting signee: no key named ~p", [Keyname]),
-            exit({nonexstent_signee, Keyname})
-    end;
-select_signee(error, _KeyInfos) ->
-    ok.
-
 %%
 
--type keyinfo() :: #{
-    kid    => kid(),
-    sign   => boolean(),
-    verify => boolean()
-}.
-
 -spec store_key(keyname(), {pem_file, file:filename()}) ->
-    {ok, keyinfo()} | {error, file:posix() | {unknown_key, _}}.
+    ok | {error, file:posix() | {unknown_key, _}}.
 
 store_key(Keyname, {pem_file, Filename}) ->
     store_key(Keyname, {pem_file, Filename}, #{
@@ -149,21 +125,20 @@ derive_kid_from_public_key_pem_entry(JWK) ->
 }.
 
 -spec store_key(keyname(), {pem_file, file:filename()}, store_opts()) ->
-    {ok, keyinfo()} | {error, file:posix() | {unknown_key, _}}.
+    ok | {error, file:posix() | {unknown_key, _}}.
 
 store_key(Keyname, {pem_file, Filename}, Opts) ->
     case jose_jwk:from_pem_file(Filename) of
         JWK = #jose_jwk{} ->
             Key = construct_key(derive_kid(JWK, Opts), JWK),
-            ok = insert_key(Keyname, Key),
-            {ok, get_key_info(Key)};
+            ok = insert_key(Keyname, wrap_key_info(Key));
         Error = {error, _} ->
             Error
     end.
 
-get_key_info(#{kid := KID, signer := Signer, verifier := Verifier}) ->
+wrap_key_info(#{signer := Signer, verifier := Verifier} = Key) ->
     #{
-        kid    => KID,
+        key    => Key,
         sign   => Signer /= undefined,
         verify => Verifier /= undefined
     }.
@@ -181,19 +156,30 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(id(), expiration(), t()) ->
+-spec issue(id(), expiration(), t(), keyname()) ->
     {ok, token()} |
     {error,
-        nonexistent_signee
+        nonexistent_key
     }.
 
-issue(JTI, Expiration, Auth) ->
-    case get_signee_key() of
-        Key = #{} ->
+issue(JTI, Expiration, Auth, Signee) ->
+    case try_get_key_for_sign(Signee) of
+        Key when is_map(Key) ->
             Claims = construct_final_claims(Auth, Expiration, JTI),
             sign(Key, Claims);
         undefined ->
-            {error, nonexistent_signee}
+            {error, nonexistent_key}
+    end.
+
+try_get_key_for_sign(Keyname) ->
+    case get_key_by_name(Keyname) of
+        #{sign := true, key := Key} ->
+            Key;
+        #{} = KeyInfo ->
+            _ = lager:error("Error setting signee: signing with ~p is not allowed", [Keyname]),
+            exit({invalid_signee, Keyname, KeyInfo});
+        undefined ->
+            undefined
     end.
 
 construct_final_claims({{Subject, ACL}, Claims}, Expiration, JTI) ->
@@ -258,7 +244,7 @@ verify(Token, VerificationOpts) ->
 
 verify(KID, Alg, ExpandedToken, VerificationOpts) ->
     case get_key_by_kid(KID) of
-        #{jwk := JWK, verifier := Algs} ->
+        #{key := #{jwk := JWK, verifier := Algs}} ->
             _ = lists:member(Alg, Algs) orelse throw(invalid_operation),
             verify(JWK, ExpandedToken, VerificationOpts);
         undefined ->
@@ -377,7 +363,7 @@ get_roles_of_resource(ResourceName, Resources) ->
 
 %%
 
-insert_key(Keyname, Key = #{kid := KID}) ->
+insert_key(Keyname, Key = #{key := #{kid := KID}}) ->
     insert_values(#{
         {keyname, Keyname} => Key,
         {kid, KID}         => Key
@@ -388,19 +374,6 @@ get_key_by_name(Keyname) ->
 
 get_key_by_kid(KID) ->
     lookup_value({kid, KID}).
-
-set_signee(Keyname) ->
-    insert_values(#{
-        signee => {keyname, Keyname}
-    }).
-
-get_signee_key() ->
-    case lookup_value(signee) of
-        {keyname, Keyname} ->
-            get_key_by_name(Keyname);
-        undefined ->
-            undefined
-    end.
 
 base64url_to_map(Base64) when is_binary(Base64) ->
     try jsx:decode(base64url:decode(Base64), [return_maps])

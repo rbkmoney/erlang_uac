@@ -10,17 +10,19 @@
 -export([configure/1]).
 -export([get_issuer_service/0]).
 -export([get_accepted_services/0]).
--export([get_operation_access/2]).
+-export([get_operation_access/1]).
 -export([get_resource_hierarchy/0]).
 
 -type operation_id() :: atom().
 -type operation_access_scopes() :: [{uac_acl:scope(), uac_acl:permission()}].
+-type service_name() :: binary().
+-type resource_hierarchy() :: #{uac_acl:scope() => resource_hierarchy() | #{}}.
 
 -type options() :: #{
-    issuer_service := binary(),
-    accepted_services := list(binary()),
-    resource_hierarchy := #{atom() => map()},
-    operations := #{atom() => operation_access_scopes()}
+    issuer_service := service_name(),
+    accepted_services := list(service_name()),
+    resource_hierarchy := resource_hierarchy(),
+    operations := #{operation_id() => operation_access_scopes()}
 }.
 -export_type([options/0]).
 
@@ -48,23 +50,23 @@ init([]) ->
 %%
 
 -spec get_issuer_service() ->
-    binary().
+    service_name().
 get_issuer_service() ->
     lookup_value(issuer_service).
 
 -spec get_accepted_services() ->
-    list(binary()).
+    list(service_name()).
 get_accepted_services() ->
     lookup_value(accepted_services).
 
--spec get_operation_access(operation_id(), _) ->
+-spec get_operation_access(operation_id()) ->
     operation_access_scopes().
-get_operation_access(OpName, _Req) ->
+get_operation_access(OpName) ->
     Operations = lookup_value(operations),
     maps:get(OpName, Operations).
 
 -spec get_resource_hierarchy() ->
-    #{atom() => map()}.
+    resource_hierarchy().
 get_resource_hierarchy() ->
     lookup_value(resource_hierarchy).
 

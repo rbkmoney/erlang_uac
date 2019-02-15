@@ -2,9 +2,6 @@ REBAR := $(shell which rebar3 2>/dev/null || which ./rebar3)
 SUBMODULES = build_utils
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
-COMPOSE_HTTP_TIMEOUT := 300
-export COMPOSE_HTTP_TIMEOUT
-
 UTILS_PATH := build_utils
 TEMPLATES_PATH := .
 
@@ -52,12 +49,6 @@ dialyze:
 start: submodules
 	$(REBAR) run
 
-devrel: submodules
-	$(REBAR) release
-
-release: submodules generate
-	$(REBAR) as prod release
-
 clean:
 	$(REBAR) cover -r
 	$(REBAR) clean
@@ -70,5 +61,5 @@ cover:
 	$(REBAR) cover
 
 # CALL_W_CONTAINER
-test: 
+test:
 	$(REBAR) do eunit, ct
