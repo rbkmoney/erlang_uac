@@ -7,17 +7,13 @@ TEMPLATES_PATH := .
 
 # Name of the service
 SERVICE_NAME := erlang_uac
-# Service image default tag
-SERVICE_IMAGE_TAG ?= $(shell git rev-parse HEAD)
-# The tag for service image to be pushed with
-SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 
 BUILD_IMAGE_TAG := 562313697353c29d4b34fb081a8b70e8c2207134
 
 CALL_ANYWHERE := \
 	submodules \
 	all compile xref lint dialyze test cover \
-	start devrel release clean distclean
+	start clean distclean
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
@@ -26,7 +22,6 @@ CALL_W_CONTAINER := $(CALL_ANYWHERE)
 all: compile
 
 -include $(UTILS_PATH)/make_lib/utils_container.mk
--include $(UTILS_PATH)/make_lib/utils_image.mk
 
 $(SUBTARGETS): %/.git: %
 	git submodule update --init $<
@@ -62,4 +57,4 @@ cover:
 
 # CALL_W_CONTAINER
 test:
-	$(REBAR) do eunit, ct
+	$(REBAR) ct

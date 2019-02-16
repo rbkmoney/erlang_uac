@@ -333,27 +333,22 @@ encode_roles(Roles) ->
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
 }) when is_map(Resources) andalso map_size(Resources) > 0 ->
-    AcceptedResources = uac_conf:get_accepted_services(),
-    Roles = get_resource_roles(Resources, AcceptedResources),
+    Accepted = uac_conf:get_accepted_services(),
+    Roles = try_get_roles(Resources, Accepted),
     {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->
     throw({invalid_token, {missing, acl}}).
 
-% eeh
-get_resource_roles(Resources, Accepted) ->
-    ResourceName = select_resource(Resources, Accepted),
-    get_roles_of_resource(ResourceName, Resources).
-
-select_resource(Resources, Accepted) ->
-    %We select the first available resource because we shouldn't really have more than one
-    case lists:filter(fun(Res) -> maps:is_key(Res, Resources) end, Accepted) of
-        [H | _] -> H;
-        [] -> throw({invalid_token, no_resources_available})
-    end.
-
-get_roles_of_resource(ResourceName, Resources) ->
-    #{ ResourceName := #{ <<"roles">> := Roles }} = Resources,
-    Roles.
+try_get_roles(Resources, [Accepted | Rest]) ->
+    case maps:get(Accepted, Resources, undefined) of
+        % We select the first available resource because we shouldn't really have more than one
+        #{<<"roles">> := Roles} ->
+            Roles;
+        undefined ->
+            try_get_roles(Resources, Rest)
+    end;
+try_get_roles(_Resources, []) ->
+    throw({invalid_token, no_resources_available}).
 
 %%
 
