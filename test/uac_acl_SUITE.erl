@@ -56,14 +56,13 @@ init_per_suite(Config) ->
         },
         access => #{
             issuer_service => <<"test">>,
-            accepted_services => [<<"test">>],
+            accepted_service => <<"test">>,
             resource_hierarchy => #{
                 party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
                 customers           => #{bindings => #{}},
                 invoices            => #{payments => #{}},
                 payment_resources => #{}
-            },
-            operations => #{}
+            }
         }
     }),
     [{apps, Apps}] ++ Config.

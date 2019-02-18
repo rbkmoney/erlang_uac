@@ -25,15 +25,9 @@
 }.
 
 -type verification_opts() :: #{
-    %% If we want to force the token expiration check
-    %% We probably only want this when we have the means to notify clients about expiring tokens
-    force_expiration => boolean(),
-
-    %% Current time
-    current_time := genlib_time:ts()
+    check_expired_as_of => genlib_time:ts()
 }.
 
--type operation_id() :: atom().
 -type api_key()      :: binary().
 
 -export_type([context/0]).
@@ -89,18 +83,17 @@ authorize_api_key(bearer, Token, VerificationOpts) ->
 %%
 
 -spec authorize_operation(
-    OperationID :: operation_id(),
+    AccessScope :: uac_conf:operation_access_scopes(),
     Auth :: uac_authorizer_jwt:t()
 ) ->
     ok | {error, unauthorized}.
 
-authorize_operation(OperationID, {_, {_SubjectID, ACL}, _}) ->
-    Access = uac_conf:get_operation_access(OperationID),
+authorize_operation(AccessScope, {_, {_SubjectID, ACL}, _}) ->
     case lists:all(
         fun ({Scope, Permission}) ->
             lists:member(Permission, uac_acl:match(Scope, ACL))
         end,
-        Access
+        AccessScope
     ) of
         true ->
             ok;

@@ -299,11 +299,11 @@ check_presence(C, undefined, _) ->
 
 check_expiration(_, Exp = 0, _) ->
     Exp;
-check_expiration(_, Exp, VOpts) when is_integer(Exp) ->
-    case get_expiration_opts(VOpts) of
-        {Now, true} when Exp > Now ->
+check_expiration(_, Exp, Opts) when is_integer(Exp) ->
+    case get_check_expiry(Opts) of
+        {true, Now} when Exp > Now ->
             Exp;
-        {_Now, false} when Exp > 0 ->
+        false when Exp > 0 ->
             Exp;
         _ ->
             throw({invalid_token, expired})
@@ -313,10 +313,13 @@ check_expiration(C, undefined, _) ->
 check_expiration(C, V, _) ->
     throw({invalid_token, {badarg, {C, V}}}).
 
-get_expiration_opts(VOpts) ->
-    CTime = maps:get(current_time, VOpts),
-    CheckExpiration = maps:get(force_expiration, VOpts, true),
-    {CTime, CheckExpiration}.
+get_check_expiry(Opts) ->
+    case maps:get(check_expired_as_of, Opts, undefined) of
+        Now when is_integer(Now) ->
+            {true, Now};
+        undefined ->
+            false
+    end.
 
 %%
 
@@ -333,22 +336,19 @@ encode_roles(Roles) ->
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
 }) when is_map(Resources) andalso map_size(Resources) > 0 ->
-    Accepted = uac_conf:get_accepted_services(),
+    Accepted = uac_conf:get_accepted_service(),
     Roles = try_get_roles(Resources, Accepted),
     {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->
     throw({invalid_token, {missing, acl}}).
 
-try_get_roles(Resources, [Accepted | Rest]) ->
+try_get_roles(Resources, Accepted) ->
     case maps:get(Accepted, Resources, undefined) of
-        % We select the first available resource because we shouldn't really have more than one
         #{<<"roles">> := Roles} ->
             Roles;
         undefined ->
-            try_get_roles(Resources, Rest)
-    end;
-try_get_roles(_Resources, []) ->
-    throw({invalid_token, no_resources_available}).
+            []
+    end.
 
 %%
 
@@ -365,11 +365,7 @@ get_key_by_kid(KID) ->
     lookup_value({kid, KID}).
 
 base64url_to_map(Base64) when is_binary(Base64) ->
-    try jsx:decode(base64url:decode(Base64), [return_maps])
-    catch
-        Class:Reason ->
-            erlang:error({base64_decode_failed, [Base64, Class, Reason]})
-    end.
+    jsx:decode(base64url:decode(Base64), [return_maps]).
 
 %%
 

@@ -23,24 +23,25 @@
 
     bad_signee_test/1,
 
-    incompatible_issuers_test/1
+    different_issuers_test/1
 ]).
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
 -type group_name()      :: atom().
 
--define(vopts(Expire), #{
-    current_time => genlib_time:unow(),
-    force_expiration => Expire
+-define(expire_as_of_now, #{
+    check_expired_as_of => genlib_time:unow()
 }).
+
+-define(test_service_acl(Access), [{[test_resource], Access}]).
 
 -spec all() ->
     [test_case_name()].
 all() ->
     [
         {group, general_tests},
-        {group, incompatible_issuers}
+        {group, different_issuers}
     ].
 
 -spec groups() ->
@@ -58,9 +59,9 @@ groups() ->
                 bad_signee_test
             ]
         },
-        {incompatible_issuers, [],
+        {different_issuers, [],
             [
-                incompatible_issuers_test
+                different_issuers_test
             ]
         }
     ].
@@ -85,17 +86,14 @@ init_per_group(general_tests, Config) ->
         },
         access => #{
             issuer_service => <<"test">>,
-            accepted_services => [<<"test">>, <<"test2">>],
+            accepted_service => <<"test">>,
             resource_hierarchy => #{
                 test_resource => #{}
-            },
-            operations => #{
-                'SomeTestOperation' => [{[test_resource], write}]
             }
         }
     }),
     [{apps, Apps}] ++ Config;
-init_per_group(incompatible_issuers, Config) ->
+init_per_group(different_issuers, Config) ->
     Apps = [
         genlib_app:start_application(snowflake),
         genlib_app:start_application(uac)
@@ -108,12 +106,9 @@ init_per_group(incompatible_issuers, Config) ->
         },
         access => #{
             issuer_service => <<"test">>,
-            accepted_services => [<<"SOME">>, <<"OTHER">>, <<"SERVICES">>],
+            accepted_service => <<"SOME_OTHER_SERVICE">>,
             resource_hierarchy => #{
                 test_resource => #{}
-            },
-            operations => #{
-                'SomeTestOperation' => [{[test_resource], write}]
             }
         }
     }),
@@ -144,56 +139,56 @@ end_per_testcase(_Name, Config) ->
 -spec successful_auth_test(config()) ->
     _.
 successful_auth_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], write}], unlimited),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
-    ok = uac:authorize_operation('SomeTestOperation', AccessContext).
+    {ok, Token} = issue_token(?test_service_acl(write), unlimited),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(?test_service_acl(write), AccessContext).
 
 -spec invalid_permissions_test(config()) ->
     _.
 invalid_permissions_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], read}], unlimited),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
-    {error, _} = uac:authorize_operation('SomeTestOperation', AccessContext).
+    {ok, Token} = issue_token(?test_service_acl(read), unlimited),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    {error, _} = uac:authorize_operation(?test_service_acl(write), AccessContext).
 
 -spec bad_token_test(config()) ->
     _.
 bad_token_test(Config) ->
-    {ok, Token} = issue_dummy_token([{[test_resource], write}], Config),
-    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
+    {ok, Token} = issue_dummy_token(?test_service_acl(write), Config),
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
 
 -spec no_token_test(config()) ->
     _.
 no_token_test(_) ->
     Token = <<"">>,
-    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
 
 -spec force_expiration_test(config()) ->
     _.
 force_expiration_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)),
-    ok = uac:authorize_operation('SomeTestOperation', AccessContext).
+    {ok, Token} = issue_token(?test_service_acl(write), {deadline, 1}),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(?test_service_acl(write), AccessContext).
 
 -spec force_expiration_fail_test(config()) ->
     _.
 force_expiration_fail_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], write}], {deadline, 1}),
-    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(true)).
+    {ok, Token} = issue_token(?test_service_acl(write), {deadline, 1}),
+    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?expire_as_of_now).
 
 -spec bad_signee_test(config()) ->
     _.
 bad_signee_test(_) ->
-    ACL = [{[test_resource], write}],
+    ACL = ?test_service_acl(write),
     {error, nonexistent_key} =
         uac_authorizer_jwt:issue(unique_id(), unlimited, {{<<"TEST">>, uac_acl:from_list(ACL)}, #{}}, random).
 
 %%
 
--spec incompatible_issuers_test(config()) ->
+-spec different_issuers_test(config()) ->
     _.
-incompatible_issuers_test(_) ->
-    {ok, Token} = issue_token([{[test_resource], write}], unlimited),
-    {error, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, ?vopts(false)).
+different_issuers_test(_) ->
+    {ok, Token} = issue_token(?test_service_acl(write), unlimited),
+    {ok, {_, {_, []}, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
 
 %%
 

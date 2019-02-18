@@ -12,6 +12,7 @@
 
 -export_type([t/0]).
 -export_type([scope/0]).
+-export_type([resource/0]).
 -export_type([permission/0]).
 
 -export([new/0]).

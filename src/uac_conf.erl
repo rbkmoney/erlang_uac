@@ -9,22 +9,22 @@
 
 -export([configure/1]).
 -export([get_issuer_service/0]).
--export([get_accepted_services/0]).
+-export([get_accepted_service/0]).
 -export([get_operation_access/1]).
 -export([get_resource_hierarchy/0]).
 
 -type operation_id() :: atom().
 -type operation_access_scopes() :: [{uac_acl:scope(), uac_acl:permission()}].
 -type service_name() :: binary().
--type resource_hierarchy() :: #{uac_acl:scope() => resource_hierarchy() | #{}}.
+-type resource_hierarchy() :: #{uac_acl:resource() => resource_hierarchy() | #{}}.
 
 -type options() :: #{
     issuer_service := service_name(),
-    accepted_services := list(service_name()),
-    resource_hierarchy := resource_hierarchy(),
-    operations := #{operation_id() => operation_access_scopes()}
+    accepted_service := service_name(),
+    resource_hierarchy := resource_hierarchy()
 }.
 -export_type([options/0]).
+-export_type([operation_access_scopes/0]).
 
 %%
 
@@ -54,10 +54,10 @@ init([]) ->
 get_issuer_service() ->
     lookup_value(issuer_service).
 
--spec get_accepted_services() ->
+-spec get_accepted_service() ->
     list(service_name()).
-get_accepted_services() ->
-    lookup_value(accepted_services).
+get_accepted_service() ->
+    lookup_value(accepted_service).
 
 -spec get_operation_access(operation_id()) ->
     operation_access_scopes().

@@ -10,7 +10,8 @@
         genlib,
         jose,
         rfc3339,
-        base64url
+        base64url,
+        jsx
     ]},
     {env, []},
     {modules, []},
