@@ -85,8 +85,7 @@ init_per_group(general_tests, Config) ->
             }
         },
         access => #{
-            issuer_service => <<"test">>,
-            accepted_service => <<"test">>,
+            service_name => <<"test">>,
             resource_hierarchy => #{
                 test_resource => #{}
             }
@@ -105,8 +104,7 @@ init_per_group(different_issuers, Config) ->
             }
         },
         access => #{
-            issuer_service => <<"test">>,
-            accepted_service => <<"SOME_OTHER_SERVICE">>,
+            service_name => <<"test">>,
             resource_hierarchy => #{
                 test_resource => #{}
             }
@@ -188,6 +186,15 @@ bad_signee_test(_) ->
     _.
 different_issuers_test(_) ->
     {ok, Token} = issue_token(?test_service_acl(write), unlimited),
+    uac:configure(#{
+        jwt => #{},
+        access => #{
+            service_name => <<"SOME_OTHER_SERVICE">>,
+            resource_hierarchy => #{
+                test_resource => #{}
+            }
+        }
+    }),
     {ok, {_, {_, []}, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
 
 %%

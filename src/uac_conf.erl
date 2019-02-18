@@ -8,12 +8,9 @@
 %% API
 
 -export([configure/1]).
--export([get_issuer_service/0]).
--export([get_accepted_service/0]).
--export([get_operation_access/1]).
+-export([get_service_name/0]).
 -export([get_resource_hierarchy/0]).
 
--type operation_id() :: atom().
 -type operation_access_scopes() :: [{uac_acl:scope(), uac_acl:permission()}].
 -type service_name() :: binary().
 -type resource_hierarchy() :: #{uac_acl:resource() => resource_hierarchy() | #{}}.
@@ -49,21 +46,10 @@ init([]) ->
 %% API
 %%
 
--spec get_issuer_service() ->
+-spec get_service_name() ->
     service_name().
-get_issuer_service() ->
-    lookup_value(issuer_service).
-
--spec get_accepted_service() ->
-    list(service_name()).
-get_accepted_service() ->
-    lookup_value(accepted_service).
-
--spec get_operation_access(operation_id()) ->
-    operation_access_scopes().
-get_operation_access(OpName) ->
-    Operations = lookup_value(operations),
-    maps:get(OpName, Operations).
+get_service_name() ->
+    lookup_value(service_name).
 
 -spec get_resource_hierarchy() ->
     resource_hierarchy().

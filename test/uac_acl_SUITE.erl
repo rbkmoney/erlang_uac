@@ -49,14 +49,12 @@ init_per_suite(Config) ->
     Apps = genlib_app:start_application(uac),
     uac:configure(#{
         jwt => #{
-            signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
         },
         access => #{
-            issuer_service => <<"test">>,
-            accepted_service => <<"test">>,
+            service_name => <<"test">>,
             resource_hierarchy => #{
                 party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
                 customers           => #{bindings => #{}},

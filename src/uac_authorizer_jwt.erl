@@ -324,7 +324,7 @@ get_check_expiry(Opts) ->
 %%
 
 encode_roles(Roles) ->
-    IssuerResource = uac_conf:get_issuer_service(),
+    IssuerResource = uac_conf:get_service_name(),
     #{
         <<"resource_access">> => #{
             IssuerResource => #{
@@ -336,7 +336,7 @@ encode_roles(Roles) ->
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
 }) when is_map(Resources) andalso map_size(Resources) > 0 ->
-    Accepted = uac_conf:get_accepted_service(),
+    Accepted = uac_conf:get_service_name(),
     Roles = try_get_roles(Resources, Accepted),
     {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->
