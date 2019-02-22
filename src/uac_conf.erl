@@ -16,8 +16,7 @@
 -type resource_hierarchy() :: #{uac_acl:resource() => resource_hierarchy() | #{}}.
 
 -type options() :: #{
-    issuer_service := service_name(),
-    accepted_service := service_name(),
+    service_name := service_name(),
     resource_hierarchy := resource_hierarchy()
 }.
 -export_type([options/0]).
