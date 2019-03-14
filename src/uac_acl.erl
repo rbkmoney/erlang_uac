@@ -234,9 +234,4 @@ get_resource_hierarchy() ->
     uac_conf:get_resource_hierarchy().
 
 delve(Resource, Hierarchy) ->
-    case maps:find(Resource, Hierarchy) of
-        {ok, Sub} ->
-            Sub;
-        error ->
-            #{}
-    end.
+    maps:get(Resource, Hierarchy, #{}).
