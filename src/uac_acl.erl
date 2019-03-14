@@ -238,5 +238,5 @@ delve(Resource, Hierarchy) ->
         {ok, Sub} ->
             Sub;
         error ->
-            error({badarg, {resource, Resource}})
+            #{}
     end.
