@@ -99,14 +99,11 @@ illegal_input_test(_C) ->
     ?assertError({badarg, {permission, _}}, from_list([{[invoices], wread}])).
 
 unrecognized_resource_test(_C) ->
-    ?assertEqual(
-        [<<"payments:read">>],
-        encode(from_list([{[payments], read}]))
-    ),
-    ?assertEqual(
-        [<<"payments.42.metadata:read">>],
-        encode(from_list([{[{payments, <<"42">>}, metadata], read}]))
-    ).
+    ?assertEqual([<<"payments:read">>], encode(from_list([{[payments], read}]))),
+    ACL1 = [{[{payments, <<"42">>}, metadata], read}],
+    Enc1 = [<<"payments.42.metadata:read">>],
+    ?assertEqual(Enc1, encode(from_list(ACL1))),
+    ?assertEqual(decode(Enc1), from_list(ACL1)).
 
 empty_test(_C) ->
     [] = encode(from_list([])),

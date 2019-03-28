@@ -6,7 +6,7 @@
 
 -type priority()      :: integer().
 -type scope()         :: [resource() | {resource(), resource_id()}, ...].
--type resource()      :: atom().
+-type resource()      :: {unknown, resource_id()} | atom().
 -type resource_id()   :: binary().
 -type permission()    :: read | write.
 
