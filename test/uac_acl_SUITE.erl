@@ -103,7 +103,8 @@ unrecognized_resource_test(_C) ->
     ACL1 = [{[{payments, <<"42">>}, metadata], read}],
     Enc1 = [<<"payments.42.metadata:read">>],
     ?assertEqual(Enc1, encode(from_list(ACL1))),
-    ?assertEqual(decode(Enc1), from_list(ACL1)).
+    ?assertEqual(decode(Enc1), from_list(ACL1)),
+    _ = decode([<<"blarg.42.glarb:write">>]).
 
 empty_test(_C) ->
     [] = encode(from_list([])),
