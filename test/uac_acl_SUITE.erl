@@ -99,12 +99,15 @@ illegal_input_test(_C) ->
     ?assertError({badarg, {permission, _}}, from_list([{[invoices], wread}])).
 
 unrecognized_resource_test(_C) ->
-    ?assertEqual([<<"payments:read">>], encode(from_list([{[payments], read}]))),
-    ACL1 = [{[{payments, <<"42">>}, metadata], read}],
-    Enc1 = [<<"payments.42.metadata:read">>],
-    ?assertEqual(Enc1, encode(from_list(ACL1))),
-    ?assertEqual(decode(Enc1), from_list(ACL1)),
-    _ = decode([<<"blarg.42.glarb:write">>]).
+    ACL1 = from_list([
+        {{unknown, <<"blargh">>}, read}
+    ]),
+    Enc1 = [
+        <<"blargh:read">>
+    ],
+    Enc1 = encode(ACL1),
+    ACL1 = decode(Enc1),
+    ACL1 = decode(encode(ACL1)).
 
 empty_test(_C) ->
     [] = encode(from_list([])),

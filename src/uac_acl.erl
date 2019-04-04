@@ -5,8 +5,10 @@
 -opaque t()           :: [{{priority(), scope()}, [permission()]}].
 
 -type priority()      :: integer().
--type scope()         :: [resource() | {resource(), resource_id()}, ...].
--type resource()      :: {unknown, resource_id()} | atom().
+-type unknown_scope() :: {unknown, binary()}.
+-type known_scope()   :: [resource() | {resource(), resource_id()}, ...].
+-type scope()         :: known_scope() | unknown_scope().
+-type resource()      :: atom().
 -type resource_id()   :: binary().
 -type permission()    :: read | write.
 
@@ -49,6 +51,8 @@ from_list(L) ->
 -spec insert_scope(scope(), permission(), t()) ->
     t().
 
+insert_scope({unknown, _} = Scope, Permission, ACL) ->
+    insert({{0, Scope}, [Permission]}, ACL);
 insert_scope(Scope, Permission, ACL) ->
     Priority = compute_priority(Scope, Permission),
     insert({{Priority, Scope}, [Permission]}, ACL).
@@ -163,7 +167,12 @@ decode_entry(V, ACL) ->
 
 decode_scope(V) ->
     Hierarchy = get_resource_hierarchy(),
-    decode_scope_frags(binary:split(V, <<".">>, [global]), Hierarchy).
+    try
+        decode_scope_frags(binary:split(V, <<".">>, [global]), Hierarchy)
+    catch
+        error:{badarg, _} ->
+            {unknown, V}
+    end.
 
 decode_scope_frags([V1, V2 | Vs], H) ->
     {Resource, H1} = decode_scope_frag_resource(V1, V2, H),
@@ -183,7 +192,7 @@ decode_scope_frag_resource(V, ID, H) ->
 decode_resource(V) ->
     try binary_to_existing_atom(V, utf8) catch
         error:badarg ->
-            {unknown, V}
+            error({badarg, {resource, V}})
     end.
 
 decode_permission(<<"read">>) ->
@@ -206,6 +215,8 @@ encode_entry({{_Priority, Scope}, Permissions}) ->
     [begin P = encode_permission(Permission), <<S/binary, ":", P/binary>> end
         || Permission <- Permissions].
 
+encode_scope({unknown, V}) when is_binary(V) ->
+    V;
 encode_scope(Scope) ->
     Hierarchy = get_resource_hierarchy(),
     genlib_string:join($., encode_scope_frags(Scope, Hierarchy)).
@@ -220,8 +231,6 @@ encode_scope_frags([Resource | Rest], H) ->
 encode_scope_frags([], _) ->
     [].
 
-encode_resource({unknown, V}) when is_binary(V) ->
-    V;
 encode_resource(V) when is_atom(V) ->
     atom_to_binary(V, utf8).
 
@@ -236,4 +245,9 @@ get_resource_hierarchy() ->
     uac_conf:get_resource_hierarchy().
 
 delve(Resource, Hierarchy) ->
-    maps:get(Resource, Hierarchy, #{}).
+    case maps:find(Resource, Hierarchy) of
+        {ok, Sub} ->
+            Sub;
+        error ->
+            error({badarg, {resource, Resource}})
+    end.
