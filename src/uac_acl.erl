@@ -14,6 +14,7 @@
 
 -export_type([t/0]).
 -export_type([scope/0]).
+-export_type([known_scope/0]).
 -export_type([resource/0]).
 -export_type([permission/0]).
 
@@ -112,9 +113,8 @@ compute_permission_priority(V) ->
 
 %%
 
--spec match(scope(), t()) ->
+-spec match(known_scope(), t()) ->
     [permission()].
-
 match(Scope, ACL) when length(Scope) > 0 ->
     match_rules(Scope, ACL);
 match(Scope, _) ->
