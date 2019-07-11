@@ -211,7 +211,7 @@ sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
             {malformed_acl, term()}
         } |
         {nonexistent_key, kid()} |
-        {invalid_operation, term() }|
+        {invalid_operation, term()} |
         invalid_signature
     }.
 
