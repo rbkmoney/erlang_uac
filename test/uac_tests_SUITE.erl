@@ -10,6 +10,7 @@
 
 -export([
     successful_auth_test/1,
+    multiple_domain_successful_auth_test/1,
     invalid_permissions_test/1,
     bad_token_test/1,
     no_token_test/1,
@@ -39,6 +40,7 @@
 all() ->
     [
         successful_auth_test,
+        multiple_domain_successful_auth_test,
         invalid_permissions_test,
         bad_token_test,
         no_token_test,
@@ -85,6 +87,32 @@ successful_auth_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
     {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
+
+
+-spec multiple_domain_successful_auth_test(config()) ->
+    _.
+multiple_domain_successful_auth_test(_) ->
+    ACL1 = ?TEST_SERVICE_ACL(write),
+    ACL2 = ?TEST_SERVICE_ACL(read),
+    Domain1  = <<"api-1">>,
+    Domain2  = <<"api-2">>,
+    {ok, Token} = issue_token(#{
+        Domain1 => uac_acl:from_list(ACL1),
+        Domain2 => uac_acl:from_list(ACL2)
+    }, unlimited),
+    ok = uac_conf:configure(#{
+        service_name => Domain1
+    }),
+    {ok, AccessContext1} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(ACL1, AccessContext1),
+
+
+    ok = uac_conf:configure(#{
+        service_name => Domain2
+    }),
+    {ok, AccessContext2} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(ACL2, AccessContext2).
+
 
 -spec invalid_permissions_test(config()) ->
     _.
@@ -168,6 +196,11 @@ unknown_resources_fail_encode_test(_) ->
     ACL = [{[different_resource], read}, {[test_resource], write}, {[even_more_different_resource], read}],
     ?assertError({badarg, {resource, _}}, issue_token(ACL, unlimited)).
 %%
+
+issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
+    PartyID = <<"TEST">>,
+    Claims = #{<<"TEST">> => <<"TEST">>},
+    uac_authorizer_jwt:issue(unique_id(), LifeTime, PartyID, DomainRoles, Claims, test);
 
 issue_token(ACL, LifeTime) ->
     PartyID = <<"TEST">>,
