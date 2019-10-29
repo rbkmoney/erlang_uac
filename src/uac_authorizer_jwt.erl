@@ -38,7 +38,7 @@
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
-
+-export_type([domain_name/0]).
 %%
 
 -type options() :: #{
@@ -161,7 +161,7 @@ construct_key(KID, JWK) ->
     {error, {invalid_signee, Reason :: atom()}}.
 
 issue(JTI, Expiration, {SubjectID, ACL}, Claims, Signee) ->
-    Domain = uac_conf:get_service_name(),
+    Domain = uac_conf:get_domain_name(),
     issue(JTI, Expiration, SubjectID, #{Domain => ACL}, Claims, Signee).
 
 -spec issue(id(), expiration(), subject_id(), domains(), claims(), keyname()) ->
@@ -342,7 +342,7 @@ encode_roles(DomainRoles) ->
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
 }) when is_map(Resources) andalso map_size(Resources) > 0 ->
-    Accepted = uac_conf:get_service_name(),
+    Accepted = uac_conf:get_domain_name(),
     Roles = try_get_roles(Resources, Accepted),
     {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->

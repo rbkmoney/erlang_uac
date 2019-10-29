@@ -33,7 +33,7 @@
     [{[test_resource], Access}]
 ).
 
--define(TEST_SERVICE_NAME, <<"test">>).
+-define(TEST_DOMAIN_NAME, <<"test">>).
 
 -spec all() ->
     [test_case_name()].
@@ -66,7 +66,7 @@ init_per_suite(Config) ->
             }
         },
         access => #{
-            service_name => ?TEST_SERVICE_NAME,
+            domain_name => ?TEST_DOMAIN_NAME,
             resource_hierarchy => #{
                 test_resource => #{}
             }
@@ -101,14 +101,14 @@ multiple_domain_successful_auth_test(_) ->
         Domain2 => uac_acl:from_list(ACL2)
     }, unlimited),
     ok = uac_conf:configure(#{
-        service_name => Domain1
+        domain_name => Domain1
     }),
     {ok, AccessContext1} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(ACL1, AccessContext1),
 
 
     ok = uac_conf:configure(#{
-        service_name => Domain2
+        domain_name => Domain2
     }),
     {ok, AccessContext2} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(ACL2, AccessContext2).
@@ -163,11 +163,11 @@ bad_signee_test(_) ->
 different_issuers_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
     ok = uac_conf:configure(#{
-        service_name => <<"SOME_OTHER_SERVICE">>
+        domain_name => <<"SOME_OTHER_SERVICE">>
     }),
     {ok, {_, {_, []}, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac_conf:configure(#{
-        service_name => ?TEST_SERVICE_NAME
+        domain_name => ?TEST_DOMAIN_NAME
     }).
 
 -spec unknown_resources_ok_test(config()) ->
