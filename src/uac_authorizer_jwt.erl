@@ -25,8 +25,8 @@
 -type subject()      :: {subject_id(), uac_acl:t()}.
 -type subject_id()   :: binary().
 -type t()            :: {id(), subject(), claims()}.
--type domain()       :: binary().
--type domain_roles() :: #{domain() => uac_acl:t()}.
+-type domain_name()  :: binary().
+-type domains()      :: #{domain_name() => uac_acl:t()}.
 -type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
@@ -164,7 +164,7 @@ issue(JTI, Expiration, {SubjectID, ACL}, Claims, Signee) ->
     Domain = uac_conf:get_service_name(),
     issue(JTI, Expiration, SubjectID, #{Domain => ACL}, Claims, Signee).
 
--spec issue(id(), expiration(), subject_id(), domain_roles(), claims(), keyname()) ->
+-spec issue(id(), expiration(), subject_id(), domains(), claims(), keyname()) ->
     {ok, token()} |
     {error, nonexistent_key} |
     {error, {invalid_signee, Reason :: atom()}}.
