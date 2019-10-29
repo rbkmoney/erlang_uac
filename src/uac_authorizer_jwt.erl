@@ -336,8 +336,8 @@ get_check_expiry(Opts) ->
 %%
 
 encode_roles(DomainRoles) ->
-    F = fun(Domain, Roles, Acc) -> Acc#{Domain => #{<<"roles">> => uac_acl:encode(Roles)}} end,
-    #{<<"resource_access">> => maps:fold(F, #{}, DomainRoles)}.
+    F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
+    #{<<"resource_access">> => maps:map(F, DomainRoles)}.
 
 decode_roles(Claims = #{
     <<"resource_access">> := Resources
