@@ -341,22 +341,22 @@ get_check_expiry(Opts) ->
             false
     end.
 
--spec get_subject_id(uac:context()) -> binary().
+-spec get_subject_id(t()) -> binary().
 
 get_subject_id({_Id, {SubjectID, _ACL}, _Claims}) ->
     SubjectID.
 
--spec get_claims(uac:context()) -> uac:claims().
+-spec get_claims(t()) -> claims().
 
 get_claims({_Id, _Subject, Claims}) ->
     Claims.
 
--spec get_claim(binary(), uac:context()) -> term().
+-spec get_claim(binary(), t()) -> term().
 
 get_claim(ClaimName, {_Id, _Subject, Claims}) ->
     maps:get(ClaimName, Claims).
 
--spec get_claim(binary(), uac:context(), term()) -> term().
+-spec get_claim(binary(), t(), term()) -> term().
 
 get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
     maps:get(ClaimName, Claims, Default).
