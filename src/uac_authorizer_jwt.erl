@@ -14,6 +14,13 @@
 
 %%
 
+-export([get_subject_id/1]).
+-export([get_claims/1]).
+-export([get_claim/2]).
+-export([get_claim/3]).
+
+%%
+
 -include_lib("jose/include/jose_jwk.hrl").
 -include_lib("jose/include/jose_jwt.hrl").
 
@@ -333,6 +340,26 @@ get_check_expiry(Opts) ->
         undefined ->
             false
     end.
+
+-spec get_subject_id(uac:context()) -> binary().
+
+get_subject_id({_Id, {SubjectID, _ACL}, _Claims}) ->
+    SubjectID.
+
+-spec get_claims(uac:context()) -> uac:claims().
+
+get_claims({_Id, _Subject, Claims}) ->
+    Claims.
+
+-spec get_claim(binary(), uac:context()) -> term().
+
+get_claim(ClaimName, {_Id, _Subject, Claims}) ->
+    maps:get(ClaimName, Claims).
+
+-spec get_claim(binary(), uac:context(), term()) -> term().
+
+get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
+    maps:get(ClaimName, Claims, Default).
 
 %%
 
