@@ -11,6 +11,7 @@
 -export([issue/5]).
 -export([issue/6]).
 -export([verify/2]).
+-export([sign/1]).
 
 %%
 
@@ -88,6 +89,8 @@ init([]) ->
 configure(Options) ->
     Keyset = parse_options(Options),
     _ = maps:map(fun ensure_store_key/2, Keyset),
+    Signee = maps:find(signee, Options),
+    _ = insert_values(#{signee => {keyname, Signee}}), % TODO rename to signee?
     ok.
 
 parse_options(Options) ->
@@ -181,7 +184,7 @@ issue(JTI, Expiration, SubjectID, DomainRoles, Claims, Signee) ->
     case try_get_key_for_sign(Signee) of
         {ok, Key} ->
             FinalClaims = construct_final_claims(SubjectID, DomainRoles, Claims, Expiration, JTI),
-            sign(Key, FinalClaims);
+            do_sign(Key, FinalClaims);
         {error, Error} ->
             {error, Error}
     end.
@@ -213,7 +216,18 @@ get_expires_at({deadline, Dl}) ->
 get_expires_at(unlimited) ->
     0.
 
-sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
+-spec sign(claims()) -> {ok, token()} | {error, nonexistent_signee}.
+
+sign(Claims) ->
+    case lookup_value(signee) of
+        {keyname, Keyname} ->
+            Key = get_key_by_name(Keyname),
+            do_sign(Key, Claims);
+        undefined ->
+            {error, nonexistent_signee}
+    end.
+
+do_sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
     JWT = jose_jwt:sign(JWK, JWS#{<<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
