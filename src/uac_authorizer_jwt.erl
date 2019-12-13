@@ -35,7 +35,6 @@
 -type t()            :: {id(), subject(), claims()}.
 -type domain_name()  :: binary().
 -type domains()      :: #{domain_name() => uac_acl:t()}.
--type signee()       :: atom().
 -type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
@@ -215,7 +214,7 @@ get_expires_at({deadline, Dl}) ->
 get_expires_at(unlimited) ->
     0.
 
--spec sign(signee(), claims()) -> {ok, token()} |
+-spec sign(keyname(), claims()) -> {ok, token()} |
     {error, {invalid_signee, signing_not_allowed}} |
     {error, nonexistent_key}.
 
