@@ -36,6 +36,8 @@
 
 -define(TEST_DOMAIN_NAME, <<"test">>).
 
+-define(SIGNEE, test).
+
 -spec all() ->
     [test_case_name()].
 all() ->
@@ -63,7 +65,6 @@ init_per_suite(Config) ->
     ],
     uac:configure(#{
         jwt => #{
-            signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
@@ -205,7 +206,7 @@ sign_test(_) ->
     Claims = #{
         <<"TEST">> => <<"TEST">>
     },
-    {ok, _} = uac_authorizer_jwt:sign(Claims).
+    {ok, _} = uac_authorizer_jwt:sign(?SIGNEE, Claims).
 
 %%
 

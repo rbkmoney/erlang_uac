@@ -11,7 +11,7 @@
 -export([issue/5]).
 -export([issue/6]).
 -export([verify/2]).
--export([sign/1]).
+-export([sign/2]).
 
 %%
 
@@ -35,6 +35,7 @@
 -type t()            :: {id(), subject(), claims()}.
 -type domain_name()  :: binary().
 -type domains()      :: #{domain_name() => uac_acl:t()}.
+-type signee()       :: atom().
 -type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
@@ -89,10 +90,6 @@ init([]) ->
 configure(Options) ->
     Keyset = parse_options(Options),
     _ = maps:map(fun ensure_store_key/2, Keyset),
-    case maps:get(signee, Options, undefined) of
-        undefined -> ok;
-        Signee    -> insert_values(#{signee => {keyname, Signee}})
-    end,
     ok.
 
 parse_options(Options) ->
@@ -218,15 +215,14 @@ get_expires_at({deadline, Dl}) ->
 get_expires_at(unlimited) ->
     0.
 
--spec sign(claims()) -> {ok, token()} | {error, nonexistent_signee}.
+-spec sign(signee(), claims()) -> {ok, token()} | {error, {invalid_signee, signing_not_allowed}} | {error, nonexistent_key}.
 
-sign(Claims) ->
-    case lookup_value(signee) of
-        {keyname, Keyname} ->
-            Key = get_key_by_name(Keyname),
+sign(Signee, Claims) ->
+    case try_get_key_for_sign(Signee) of
+        {ok, Key} ->
             do_sign(Key, Claims);
-        undefined ->
-            {error, nonexistent_signee}
+        {error, _} = Error ->
+            Error
     end.
 
 do_sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
