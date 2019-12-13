@@ -215,7 +215,9 @@ get_expires_at({deadline, Dl}) ->
 get_expires_at(unlimited) ->
     0.
 
--spec sign(signee(), claims()) -> {ok, token()} | {error, {invalid_signee, signing_not_allowed}} | {error, nonexistent_key}.
+-spec sign(signee(), claims()) -> {ok, token()} |
+    {error, {invalid_signee, signing_not_allowed}} |
+    {error, nonexistent_key}.
 
 sign(Signee, Claims) ->
     case try_get_key_for_sign(Signee) of
