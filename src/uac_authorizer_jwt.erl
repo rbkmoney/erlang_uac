@@ -89,8 +89,10 @@ init([]) ->
 configure(Options) ->
     Keyset = parse_options(Options),
     _ = maps:map(fun ensure_store_key/2, Keyset),
-    Signee = maps:get(signee, Options),
-    _ = insert_values(#{signee => {keyname, Signee}}),
+    case maps:get(signee, Options, undefined) of
+        error -> ok;
+        Signee -> insert_values(#{signee => {keyname, Signee}})
+    end,
     ok.
 
 parse_options(Options) ->
