@@ -19,7 +19,8 @@
     bad_signee_test/1,
     different_issuers_test/1,
     unknown_resources_ok_test/1,
-    unknown_resources_fail_encode_test/1
+    unknown_resources_fail_encode_test/1,
+    sign_test/1
 ]).
 
 -type test_case_name()  :: atom().
@@ -49,7 +50,8 @@ all() ->
         bad_signee_test,
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
-        different_issuers_test
+        different_issuers_test,
+        sign_test
     ].
 
 -spec init_per_suite(config()) ->
@@ -61,6 +63,7 @@ init_per_suite(Config) ->
     ],
     uac:configure(#{
         jwt => #{
+            signee => test,
             keyset => #{
                 test => {pem_file, get_keysource("keys/local/private.pem", Config)}
             }
@@ -195,6 +198,15 @@ unknown_resources_ok_test(_) ->
 unknown_resources_fail_encode_test(_) ->
     ACL = [{[different_resource], read}, {[test_resource], write}, {[even_more_different_resource], read}],
     ?assertError({badarg, {resource, _}}, issue_token(ACL, unlimited)).
+
+-spec sign_test(config()) ->
+    _.
+sign_test(_) ->
+    Claims = #{
+        <<"TEST">> => <<"TEST">>
+    },
+    {ok, _} = uac_authorizer_jwt:sign(Claims).
+
 %%
 
 issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
