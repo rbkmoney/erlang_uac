@@ -383,15 +383,6 @@ decode_roles(Claims, _) ->
     % don't even bother looking for roles
     {[], Claims}.
 
-% decode_roles(Claims = #{
-%     <<"resource_access">> := Resources
-% }, _) when is_map(Resources) andalso map_size(Resources) > 0 ->
-%     Accepted = uac_conf:get_domain_name(),
-%     Roles = try_get_roles(Resources, Accepted),
-%     {Roles, maps:remove(<<"resource_access">>, Claims)};
-% decode_roles(Claims, #{should_authorize_operations := true}) ->
-%     throw({invalid_token, {missing, acl}}).
-
 try_get_roles(Resources, Accepted) ->
     case maps:get(Accepted, Resources, undefined) of
         #{<<"roles">> := Roles} ->
