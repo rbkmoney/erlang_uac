@@ -235,8 +235,9 @@ sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
         invalid_signature
     }.
 
-verify(Token, VerificationOpts) ->
+verify(Token, VerificationOpts0) ->
     try
+        VerificationOpts = maps:merge(#{should_authorize_operations => true}, VerificationOpts0),
         {_, ExpandedToken} = jose_jws:expand(Token),
         #{<<"protected">> := ProtectedHeader} = ExpandedToken,
         Header = base64url_to_map(ProtectedHeader),
@@ -269,7 +270,7 @@ verify(JWK, ExpandedToken, VerificationOpts) ->
     case jose_jwt:verify(JWK, ExpandedToken) of
         {true, #jose_jwt{fields = Claims}, _JWS} ->
             {KeyMeta, Claims1} = validate_claims(Claims, VerificationOpts),
-            get_result(KeyMeta, decode_roles(Claims1));
+            get_result(KeyMeta, decode_roles(Claims1, VerificationOpts));
         {false, _JWT, _JWS} ->
             {error, invalid_signature}
     end.
@@ -367,14 +368,27 @@ encode_roles(DomainRoles) ->
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
     #{<<"resource_access">> => maps:map(F, DomainRoles)}.
 
-decode_roles(Claims = #{
-    <<"resource_access">> := Resources
-}) when is_map(Resources) andalso map_size(Resources) > 0 ->
-    Accepted = uac_conf:get_domain_name(),
-    Roles = try_get_roles(Resources, Accepted),
-    {Roles, maps:remove(<<"resource_access">>, Claims)};
-decode_roles(_) ->
-    throw({invalid_token, {missing, acl}}).
+decode_roles(Claims, #{should_authorize_operations := true}) ->
+    case maps:get(<<"resource_access">>, Claims, undefined) of
+        Resources when is_map(Resources) andalso map_size(Resources) > 0 ->
+            Accepted = uac_conf:get_domain_name(),
+            Roles = try_get_roles(Resources, Accepted),
+            {Roles, maps:remove(<<"resource_access">>, Claims)};
+        _ ->
+            throw({invalid_token, {missing, acl}})
+    end;
+decode_roles(Claims, _) ->
+    % don't even bother looking for roles
+    {[], Claims}.
+
+% decode_roles(Claims = #{
+%     <<"resource_access">> := Resources
+% }, _) when is_map(Resources) andalso map_size(Resources) > 0 ->
+%     Accepted = uac_conf:get_domain_name(),
+%     Roles = try_get_roles(Resources, Accepted),
+%     {Roles, maps:remove(<<"resource_access">>, Claims)};
+% decode_roles(Claims, #{should_authorize_operations := true}) ->
+%     throw({invalid_token, {missing, acl}}).
 
 try_get_roles(Resources, Accepted) ->
     case maps:get(Accepted, Resources, undefined) of
