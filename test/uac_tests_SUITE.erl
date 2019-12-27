@@ -19,14 +19,18 @@
     bad_signee_test/1,
     different_issuers_test/1,
     unknown_resources_ok_test/1,
-    unknown_resources_fail_encode_test/1
+    unknown_resources_fail_encode_test/1,
+    no_resource_access_token_test/1,
+    cant_authorize_without_resouce_access_test/1
 ]).
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
 
 -define(EXPIRE_AS_OF_NOW, #{
-    check_expired_as_of => genlib_time:unow()
+    claim_validators => #{
+        <<"exp">> => uac_authorizer_jwt:check_expiration_as_of(genlib_time:unow())
+    }
 }).
 
 -define(TEST_SERVICE_ACL(Access),
@@ -49,7 +53,9 @@ all() ->
         bad_signee_test,
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
-        different_issuers_test
+        different_issuers_test,
+        no_resource_access_token_test,
+        cant_authorize_without_resouce_access_test
     ].
 
 -spec init_per_suite(config()) ->
@@ -190,6 +196,21 @@ unknown_resources_ok_test(_) ->
     {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
 
+-spec no_resource_access_token_test(config()) ->
+    _.
+no_resource_access_token_test(_) ->
+    {ok, Token} = issue_token(#{}, unlimited),
+    {ok, {_, _, Claims}} = uac_authorizer_jwt:verify(Token, #{}),
+    undefined = maps:get(<<"resource_access">>, Claims, undefined),
+    {ok, _} = uac_authorizer_jwt:verify(Token, #{}).
+
+-spec cant_authorize_without_resouce_access_test(config()) ->
+    _.
+cant_authorize_without_resouce_access_test(_) ->
+    {ok, Token} = issue_token(#{}, unlimited),
+    {error, {invalid_token, {missing, resource_access}}} = uac_authorizer_jwt:verify(Token, #{claim_validators => #{
+        <<"resource_access">> => uac_authorizer_jwt:check_presence(resource_access)
+    }}).
 -spec unknown_resources_fail_encode_test(config()) ->
     _.
 unknown_resources_fail_encode_test(_) ->
