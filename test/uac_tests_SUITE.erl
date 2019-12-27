@@ -196,8 +196,7 @@ unknown_resources_ok_test(_) ->
     _.
 cant_authorize_without_resource_access(_) ->
     {ok, Token} = issue_token(#{}, unlimited),
-    {error, R} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{should_authorize_operations => true}),
-    ct:log("R: ~p", [R]).
+    {error, {invalid_token,{missing,acl}}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{should_authorize_operations => true}).
 
 -spec unknown_resources_fail_encode_test(config()) ->
     _.
