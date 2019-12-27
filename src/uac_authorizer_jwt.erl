@@ -364,9 +364,11 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
 
 %%
 
-encode_roles(DomainRoles) ->
+encode_roles(DomainRoles) when is_map(DomainRoles) andalso map_size(DomainRoles) > 0 ->
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
-    #{<<"resource_access">> => maps:map(F, DomainRoles)}.
+    #{<<"resource_access">> => maps:map(F, DomainRoles)};
+encode_roles(_) ->
+    #{}.
 
 decode_roles(Claims, #{should_authorize_operations := true}) ->
     case maps:get(<<"resource_access">>, Claims, undefined) of
