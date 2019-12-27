@@ -21,6 +21,9 @@
 
 %%
 
+-export([check_expiration_as_of/1]).
+-export([check_presence/1]).
+
 -include_lib("jose/include/jose_jwk.hrl").
 -include_lib("jose/include/jose_jwt.hrl").
 
@@ -28,7 +31,9 @@
 -type kid()          :: binary().
 -type key()          :: #jose_jwk{}.
 -type token()        :: binary().
--type claims()       :: #{binary() => term()}.
+-type claim_name()   :: binary().
+-type claim()        :: term().
+-type claims()       :: #{claim_name() => claim()}.
 -type subject()      :: {subject_id(), uac_acl:t()}.
 -type subject_id()   :: binary().
 -type t()            :: {id(), subject(), claims()}.
@@ -36,17 +41,22 @@
 -type domains()      :: #{domain_name() => uac_acl:t()}.
 -type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
-    {deadline, UnixTs :: pos_integer()}  |
+    {deadline, UnixTs  :: pos_integer()} |
     unlimited.
 -type id() :: binary().
+-type validator() :: fun((claim()) -> ok | {error, term()}).
+-type validator(ErrorResp) :: fun((claim()) -> ok | {error, ErrorResp}).
 
 -export_type([t/0]).
 -export_type([subject/0]).
+-export_type([claim_name/0]).
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
 -export_type([domain_name/0]).
 -export_type([domains/0]).
+-export_type([validator/0]).
+
 %%
 
 -type options() :: #{
@@ -275,13 +285,23 @@ verify(JWK, ExpandedToken, VerificationOpts) ->
     end.
 
 validate_claims(Claims, VerificationOpts) ->
-    validate_claims(Claims, get_validators(), VerificationOpts, #{}).
+    Validators = get_validators(VerificationOpts),
+    _ = maps:map(
+        fun(Claim, Validator) ->
+            case Validator(maps:get(Claim, Claims, undefined)) of
+                ok -> ok;
+                {error, Reason} -> throw({invalid_token, Reason})
+            end
+        end,
+        Validators
+    ),
+    {get_key_meta(Claims), Claims}.
 
-validate_claims(Claims, [{Name, Claim, Validator} | Rest], VerificationOpts, Acc) ->
-    V = Validator(Name, maps:get(Claim, Claims, undefined), VerificationOpts),
-    validate_claims(maps:without([Claim], Claims), Rest, VerificationOpts, Acc#{Name => V});
-validate_claims(Claims, [], _, Acc) ->
-    {Acc, Claims}.
+get_key_meta(Claims) ->
+    #{
+        token_id   => maps:get(<<"jti">>, Claims),
+        subject_id => maps:get(<<"sub">>, Claims)
+    }.
 
 get_result(KeyMeta, {Roles, Claims}) ->
     #{token_id := TokenID, subject_id := SubjectID} = KeyMeta,
@@ -305,40 +325,40 @@ get_alg(#{}) ->
 
 %%
 
-get_validators() ->
-    [
-        {token_id   , <<"jti">> , fun check_presence/3},
-        {subject_id , <<"sub">> , fun check_presence/3},
-        {expires_at , <<"exp">> , fun check_expiration/3}
-    ].
+get_validators(VerificationOpts) ->
+    maps:merge(
+        #{
+            <<"jti">> => check_presence(token_id),
+            <<"sub">> => check_presence(subject_id),
+            <<"exp">> => fun check_expiration/1
+        },
+        maps:get(claim_validators, VerificationOpts, #{})
+    ).
 
-check_presence(_, V, _) when is_binary(V) ->
-    V;
-check_presence(C, undefined, _) ->
-    throw({invalid_token, {missing, C}}).
+-spec check_expiration_as_of(genlib_time:ts()) ->
+    validator(expired | {missing, expiration}).
+check_expiration_as_of(Time) ->
+    fun(Expiration) ->
+        case Expiration > Time of
+            true -> ok;
+            false -> {error, expired}
+        end
+    end.
 
-check_expiration(_, Exp = 0, _) ->
-    Exp;
-check_expiration(_, Exp, Opts) when is_integer(Exp) ->
-    case get_check_expiry(Opts) of
-        {true, Now} when Exp > Now ->
-            Exp;
-        false when Exp > 0 ->
-            Exp;
-        _ ->
-            throw({invalid_token, expired})
-    end;
-check_expiration(C, undefined, _) ->
-    throw({invalid_token, {missing, C}});
-check_expiration(C, V, _) ->
-    throw({invalid_token, {badarg, {C, V}}}).
+check_expiration(undefined) ->
+    {error, {missing, expiration}};
+check_expiration(Expiration) ->
+    case Expiration >= 0 of
+        true -> ok;
+        false -> {error, expired}
+    end.
 
-get_check_expiry(Opts) ->
-    case maps:get(check_expired_as_of, Opts, undefined) of
-        Now when is_integer(Now) ->
-            {true, Now};
-        undefined ->
-            false
+-spec check_presence(ClaimName) ->
+    validator({missing, ClaimName}).
+check_presence(ClaimName) ->
+    fun
+        (undefined) -> {error, {missing, ClaimName}};
+        (_) -> ok
     end.
 
 -spec get_subject_id(t()) -> binary().
@@ -362,7 +382,8 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
     maps:get(ClaimName, Claims, Default).
 
 %%
-
+encode_roles(DomainRoles) when is_map(DomainRoles) andalso map_size(DomainRoles) =:= 0 ->
+    #{};
 encode_roles(DomainRoles) ->
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
     #{<<"resource_access">> => maps:map(F, DomainRoles)}.
@@ -373,8 +394,10 @@ decode_roles(Claims = #{
     Accepted = uac_conf:get_domain_name(),
     Roles = try_get_roles(Resources, Accepted),
     {Roles, maps:remove(<<"resource_access">>, Claims)};
-decode_roles(_) ->
-    throw({invalid_token, {missing, acl}}).
+decode_roles(#{<<"resource_access">> := _}) -> % Wrong type or empty map
+    throw({invalid_token, {missing, acl}});
+decode_roles(Claims) ->
+    {[], Claims}.
 
 try_get_roles(Resources, Accepted) ->
     case maps:get(Accepted, Resources, undefined) of

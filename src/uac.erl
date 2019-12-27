@@ -25,7 +25,7 @@
 }.
 
 -type verification_opts() :: #{
-    check_expired_as_of => genlib_time:ts()
+    claim_validators => uac_authorizer_jwt:validator()
 }.
 
 -type api_key() :: binary().
