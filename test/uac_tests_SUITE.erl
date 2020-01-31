@@ -51,7 +51,7 @@ all() ->
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
         different_issuers_test,
-        undefined_ACL_in_token_with_no_resource_access
+        undefined_acl_in_token_without_resource_access
     ].
 
 -spec init_per_suite(config()) ->
