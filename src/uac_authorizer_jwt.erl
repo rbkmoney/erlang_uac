@@ -383,7 +383,7 @@ decode_roles(Claims) ->
             undefined;
         _ ->
             % Resources is not map or an empty one
-            throw({invalid_token, {missing, acl}})
+            throw({invalid_token, {invalid, acl}})
     end,
     {Roles, maps:remove(<<"resource_access">>, Claims)}.
 
