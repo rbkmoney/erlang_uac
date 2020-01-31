@@ -286,12 +286,17 @@ validate_claims(Claims, [], _, Acc) ->
 get_result(KeyMeta, {Roles, Claims}) ->
     #{token_id := TokenID, subject_id := SubjectID} = KeyMeta,
     try
-        Subject = {SubjectID, uac_acl:decode(Roles)},
+        Subject = {SubjectID, try_decode_roles(Roles)},
         {ok, {TokenID, Subject, Claims}}
     catch
         error:{badarg, _} = Reason ->
             throw({invalid_token, {malformed_acl, Reason}})
     end.
+
+try_decode_roles(undefined) ->
+    undefined;
+try_decode_roles(Roles0) ->
+    uac_acl:decode(Roles0).
 
 get_kid(#{<<"kid">> := KID}) when is_binary(KID) ->
     KID;

@@ -152,8 +152,6 @@ match_scope(_, _) ->
 -spec decode([binary()]) ->
     t().
 
-decode(undefined) ->
-    undefined;
 decode(V) ->
     lists:foldl(fun decode_entry/2, new(), V).
 
