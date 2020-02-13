@@ -94,7 +94,7 @@ authorize_operation(AccessScope, {_, {_SubjectID, DomainRoles}, _}, Domain) ->
     authorize_operation_(AccessScope, genlib_map:get(Domain, DomainRoles)).
 
 authorize_operation_(_, undefined) ->
-    {error, undefined};
+    {error, unauthorized};
 authorize_operation_(AccessScope, ACL) ->
     case lists:all(
         fun ({Scope, Permission}) ->
