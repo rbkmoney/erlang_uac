@@ -8,7 +8,7 @@ TEMPLATES_PATH := .
 # Name of the service
 SERVICE_NAME := erlang_uac
 
-BUILD_IMAGE_TAG := 562313697353c29d4b34fb081a8b70e8c2207134
+BUILD_IMAGE_TAG := c66dc597fdc30abcb7a6368ba7cc13c02151f8de
 
 CALL_ANYWHERE := \
 	submodules \
