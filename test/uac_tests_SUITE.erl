@@ -17,7 +17,6 @@
     force_expiration_test/1,
     force_expiration_fail_test/1,
     bad_signee_test/1,
-    different_issuers_test/1,
     unknown_resources_ok_test/1,
     unknown_resources_fail_encode_test/1,
     undefined_acl_in_token_without_resource_access/1
@@ -50,7 +49,6 @@ all() ->
         bad_signee_test,
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
-        different_issuers_test,
         undefined_acl_in_token_without_resource_access
     ].
 
@@ -159,18 +157,6 @@ bad_signee_test(_) ->
         uac_authorizer_jwt:issue(unique_id(), unlimited, {<<"TEST">>, uac_acl:from_list(ACL)}, #{}, random).
 
 %%
-
--spec different_issuers_test(config()) ->
-    _.
-different_issuers_test(_) ->
-    {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
-    ok = uac_conf:configure(#{
-        domain_name => <<"SOME_OTHER_SERVICE">>
-    }),
-    {ok, {_, {_, []}, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac_conf:configure(#{
-        domain_name => ?TEST_DOMAIN_NAME
-    }).
 
 -spec unknown_resources_ok_test(config()) ->
     _.
