@@ -29,7 +29,7 @@
 -type key()          :: #jose_jwk{}.
 -type token()        :: binary().
 -type claims()       :: #{binary() => term()}.
--type subject()      :: {subject_id(), uac_acl:t() | undefined}.
+-type subject()      :: {subject_id(), domains() | undefined}.
 -type subject_id()   :: binary().
 -type t()            :: {id(), subject(), claims()}.
 -type domain_name()  :: binary().
@@ -299,8 +299,8 @@ get_result(KeyMeta, {Roles, Claims}) ->
 
 try_decode_roles(undefined) ->
     undefined;
-try_decode_roles(Roles0) ->
-    uac_acl:decode(Roles0).
+try_decode_roles(DomainRoles) ->
+    maps:map(fun(_, #{<<"roles">> := Roles}) -> uac_acl:decode(Roles) end, DomainRoles).
 
 get_kid(#{<<"kid">> := KID}) when is_binary(KID) ->
     KID;
@@ -381,8 +381,7 @@ encode_roles(_) ->
 decode_roles(Claims) ->
     Roles = case maps:get(<<"resource_access">>, Claims, undefined) of
         Resources when is_map(Resources) andalso map_size(Resources) > 0 ->
-            Accepted = uac_conf:get_domain_name(),
-           try_get_roles(Resources, Accepted);
+            Resources;
         undefined ->
             undefined;
         _ ->
@@ -390,14 +389,6 @@ decode_roles(Claims) ->
             throw({invalid_token, {invalid, acl}})
     end,
     {Roles, maps:remove(<<"resource_access">>, Claims)}.
-
-try_get_roles(Resources, Accepted) ->
-    case maps:get(Accepted, Resources, undefined) of
-        #{<<"roles">> := Roles} ->
-            Roles;
-        undefined ->
-            []
-    end.
 
 %%
 
