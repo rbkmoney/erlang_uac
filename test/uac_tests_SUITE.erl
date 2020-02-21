@@ -19,7 +19,7 @@
     bad_signee_test/1,
     unknown_resources_ok_test/1,
     unknown_resources_fail_encode_test/1,
-    undefined_acl_in_token_without_resource_access/1
+    cant_authorize_without_resource_access/1
 ]).
 
 -type test_case_name()  :: atom().
@@ -49,7 +49,7 @@ all() ->
         bad_signee_test,
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
-        undefined_acl_in_token_without_resource_access
+        cant_authorize_without_resource_access
     ].
 
 -spec init_per_suite(config()) ->
@@ -85,6 +85,7 @@ end_per_suite(Config) ->
     _.
 successful_auth_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
+    ct:log("Token: ~p", [Token]),
     {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
 
@@ -100,18 +101,12 @@ multiple_domain_successful_auth_test(_) ->
         Domain1 => uac_acl:from_list(ACL1),
         Domain2 => uac_acl:from_list(ACL2)
     }, unlimited),
-    ok = uac_conf:configure(#{
-        domain_name => Domain1
-    }),
     {ok, AccessContext1} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(ACL1, AccessContext1),
+    ok = uac:authorize_operation(ACL1, AccessContext1, Domain1),
 
-
-    ok = uac_conf:configure(#{
-        domain_name => Domain2
-    }),
     {ok, AccessContext2} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(ACL2, AccessContext2).
+    ok = uac:authorize_operation(ACL2, AccessContext2, Domain2).
+
 
 
 -spec invalid_permissions_test(config()) ->
@@ -178,11 +173,12 @@ unknown_resources_ok_test(_) ->
     {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
 
--spec undefined_acl_in_token_without_resource_access(config()) ->
+-spec cant_authorize_without_resource_access(config()) ->
     _.
-undefined_acl_in_token_without_resource_access(_) ->
+cant_authorize_without_resource_access(_) ->
     {ok, Token} = issue_token(#{}, unlimited),
-    {ok, {_, {_, undefined}, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
+    {ok, AccessContext}= uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    {error, unauthorized} = uac:authorize_operation([], AccessContext).
 
 -spec unknown_resources_fail_encode_test(config()) ->
     _.
@@ -198,8 +194,13 @@ issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
 
 issue_token(ACL, LifeTime) ->
     PartyID = <<"TEST">>,
-    Claims = #{<<"TEST">> => <<"TEST">>},
-    uac_authorizer_jwt:issue(unique_id(), LifeTime, {PartyID, uac_acl:from_list(ACL)}, Claims, test).
+    Claims = #{
+        <<"TEST">> => <<"TEST">>,
+        <<"resource_access">> => #{
+            ?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)
+        }
+    },
+    uac_authorizer_jwt:issue(unique_id(), LifeTime, PartyID, Claims, test).
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{

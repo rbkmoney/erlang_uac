@@ -90,8 +90,9 @@ authorize_operation(AccessScope, Context) ->
     ok | {error, unauthorized}.
 authorize_operation(_, {_, {_, undefined}, _}, _) ->
     {error, unauthorized};
-authorize_operation(AccessScope, {_, {_SubjectID, DomainRoles}, _}, Domain) ->
-    authorize_operation_(AccessScope, genlib_map:get(Domain, DomainRoles)).
+authorize_operation(AccessScope, {_, _, Claims}, Domain) ->
+    ACL = get_acl(Claims, Domain),
+    authorize_operation_(AccessScope, ACL).
 
 authorize_operation_(_, undefined) ->
     {error, unauthorized};
@@ -106,6 +107,13 @@ authorize_operation_(AccessScope, ACL) ->
             ok;
         false ->
             {error, unauthorized}
+    end.
+
+get_acl(Claims, Domain) ->
+    case genlib_map:get(<<"resource_access">>, Claims) of
+        undefined -> undefined;
+        DomainRoles when is_map(DomainRoles) -> genlib_map:get(Domain, DomainRoles);
+        _ -> undefined
     end.
 
 %%

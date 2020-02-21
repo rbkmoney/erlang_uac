@@ -163,18 +163,19 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(id(), expiration(), subject(), claims(), keyname()) ->
+-spec issue(id(), expiration(), subject_id(), claims(), keyname()) ->
     {ok, token()} |
     {error, nonexistent_key} |
     {error, {invalid_signee, Reason :: atom()}}.
 
-issue(JTI, Expiration, {SubjectID, ACL}, Claims, Signee) ->
-    Domain = uac_conf:get_domain_name(),
-    DomainRoles = case ACL of
-        undefined -> #{};
-        ACL -> #{Domain => ACL}
-    end,
-    issue(JTI, Expiration, SubjectID, DomainRoles, Claims, Signee).
+issue(JTI, Expiration, SubjectID, Claims, Signee) ->
+    case try_get_key_for_sign(Signee) of
+        {ok, Key} ->
+            FinalClaims = construct_final_claims(SubjectID, Claims, Expiration, JTI),
+            sign(Key, FinalClaims);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 -spec issue(id(), expiration(), subject_id(), domains(), claims(), keyname()) ->
     {ok, token()} |
@@ -182,13 +183,7 @@ issue(JTI, Expiration, {SubjectID, ACL}, Claims, Signee) ->
     {error, {invalid_signee, Reason :: atom()}}.
 
 issue(JTI, Expiration, SubjectID, DomainRoles, Claims, Signee) ->
-    case try_get_key_for_sign(Signee) of
-        {ok, Key} ->
-            FinalClaims = construct_final_claims(SubjectID, DomainRoles, Claims, Expiration, JTI),
-            sign(Key, FinalClaims);
-        {error, Error} ->
-            {error, Error}
-    end.
+    issue(JTI, Expiration, SubjectID, Claims#{<<"resource_access">> => DomainRoles}, Signee).
 
 try_get_key_for_sign(Keyname) ->
     case get_key_by_name(Keyname) of
@@ -200,14 +195,14 @@ try_get_key_for_sign(Keyname) ->
             {error, nonexistent_key}
     end.
 
-construct_final_claims(SubjectID, DomainRoles, Claims, Expiration, JTI) ->
+construct_final_claims(SubjectID, Claims, Expiration, JTI) ->
     maps:merge(
-        Claims#{
+        maps:without([<<"resource_access">>], Claims#{
             <<"jti">> => JTI,
             <<"sub">> => SubjectID,
             <<"exp">> => get_expires_at(Expiration)
-        },
-        encode_roles(DomainRoles)
+        }),
+        encode_roles(genlib_map:get(<<"resource_access">>, Claims))
     ).
 
 get_expires_at({lifetime, Lt}) ->
@@ -273,7 +268,7 @@ verify(JWK, ExpandedToken, VerificationOpts) ->
     case jose_jwt:verify(JWK, ExpandedToken) of
         {true, #jose_jwt{fields = Claims}, _JWS} ->
             {KeyMeta, Claims1} = validate_claims(Claims, VerificationOpts),
-            get_result(KeyMeta, decode_roles(Claims1));
+            get_result(KeyMeta, Claims1);
         {false, _JWT, _JWS} ->
             {error, invalid_signature}
     end.
@@ -287,20 +282,14 @@ validate_claims(Claims, [{Name, Claim, Validator} | Rest], VerificationOpts, Acc
 validate_claims(Claims, [], _, Acc) ->
     {Acc, Claims}.
 
-get_result(KeyMeta, {Roles, Claims}) ->
+get_result(KeyMeta, Claims) ->
     #{token_id := TokenID, subject_id := SubjectID} = KeyMeta,
     try
-        Subject = {SubjectID, try_decode_roles(Roles)},
-        {ok, {TokenID, Subject, Claims}}
+        {ok, {TokenID, SubjectID, decode_roles(Claims)}}
     catch
         error:{badarg, _} = Reason ->
             throw({invalid_token, {malformed_acl, Reason}})
     end.
-
-try_decode_roles(undefined) ->
-    undefined;
-try_decode_roles(DomainRoles) ->
-    maps:map(fun(_, #{<<"roles">> := Roles}) -> uac_acl:decode(Roles) end, DomainRoles).
 
 get_kid(#{<<"kid">> := KID}) when is_binary(KID) ->
     KID;
@@ -373,22 +362,22 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
 %%
 
 encode_roles(DomainRoles) when is_map(DomainRoles) andalso map_size(DomainRoles) > 0 ->
+    % do we really want to add <<"roles">>?
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
     #{<<"resource_access">> => maps:map(F, DomainRoles)};
 encode_roles(_) ->
     #{}.
 
 decode_roles(Claims) ->
-    Roles = case maps:get(<<"resource_access">>, Claims, undefined) of
-        Resources when is_map(Resources) andalso map_size(Resources) > 0 ->
-            Resources;
+    case genlib_map:get(<<"resource_access">>, Claims) of
         undefined ->
-            undefined;
+            Claims;
+        ResourceAcceess when is_map(ResourceAcceess) ->
+            DomainRoles = maps:map(fun(_, #{<<"roles">> := Roles}) -> uac_acl:decode(Roles) end, ResourceAcceess),
+            Claims#{<<"resource_access">> => DomainRoles};
         _ ->
-            % Resources is not map or an empty one
             throw({invalid_token, {invalid, acl}})
-    end,
-    {Roles, maps:remove(<<"resource_access">>, Claims)}.
+    end.
 
 %%
 
