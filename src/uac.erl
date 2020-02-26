@@ -112,8 +112,7 @@ authorize_operation_(AccessScope, ACL) ->
 get_acl(Claims, Domain) ->
     case genlib_map:get(<<"resource_access">>, Claims) of
         undefined -> undefined;
-        DomainRoles when is_map(DomainRoles) -> genlib_map:get(Domain, DomainRoles);
-        _ -> undefined
+        DomainRoles when is_map(DomainRoles) -> genlib_map:get(Domain, DomainRoles)
     end.
 
 %%
