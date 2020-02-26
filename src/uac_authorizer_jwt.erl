@@ -366,7 +366,6 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
 %%
 
 encode_roles(DomainRoles) when is_map(DomainRoles) andalso map_size(DomainRoles) > 0 ->
-    % do we really want to add <<"roles">>?
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
     maps:map(F, DomainRoles);
 encode_roles(_) ->
