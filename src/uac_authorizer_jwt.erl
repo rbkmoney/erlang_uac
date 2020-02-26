@@ -171,7 +171,7 @@ construct_key(KID, JWK) ->
 issue(JTI, Expiration, SubjectID, Claims, Signee) ->
     case try_get_key_for_sign(Signee) of
         {ok, Key} ->
-            FinalClaims = construct_final_claims(SubjectID, Claims, Expiration, JTI),
+            FinalClaims = construct_final_claims(SubjectID, Claims#{<<"exp">> => Expiration}, JTI),
             sign(Key, FinalClaims);
         {error, Error} ->
             {error, Error}
@@ -195,15 +195,19 @@ try_get_key_for_sign(Keyname) ->
             {error, nonexistent_key}
     end.
 
-construct_final_claims(SubjectID, Claims, Expiration, JTI) ->
-    maps:merge(
-        maps:without([<<"resource_access">>], Claims#{
-            <<"jti">> => JTI,
-            <<"sub">> => SubjectID,
-            <<"exp">> => get_expires_at(Expiration)
-        }),
-        encode_roles(genlib_map:get(<<"resource_access">>, Claims))
-    ).
+construct_final_claims(SubjectID, Claims, JTI) ->
+    Token0 = #{<<"jti">> => JTI, <<"sub">> => SubjectID},
+    EncodedClaims = maps:map(fun encode_claim/2, Claims),
+    maps:merge(EncodedClaims, Token0).
+
+encode_claim(<<"exp">>, Expiration) ->
+    get_expires_at(Expiration);
+encode_claim(<<"resource_access">>, DomainRoles) ->
+    encode_roles(DomainRoles);
+encode_claim(_, Value) ->
+    Value.
+
+
 
 get_expires_at({lifetime, Lt}) ->
     genlib_time:unow() + Lt;
@@ -364,7 +368,7 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
 encode_roles(DomainRoles) when is_map(DomainRoles) andalso map_size(DomainRoles) > 0 ->
     % do we really want to add <<"roles">>?
     F = fun(_, Roles) -> #{<<"roles">> => uac_acl:encode(Roles)} end,
-    #{<<"resource_access">> => maps:map(F, DomainRoles)};
+    maps:map(F, DomainRoles);
 encode_roles(_) ->
     #{}.
 
