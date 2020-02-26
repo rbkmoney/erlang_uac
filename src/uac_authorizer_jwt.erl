@@ -345,7 +345,7 @@ get_check_expiry(Opts) ->
 
 -spec get_subject_id(t()) -> binary().
 
-get_subject_id({_Id, {SubjectID, _ACL}, _Claims}) ->
+get_subject_id({_Id, SubjectID, _Claims}) ->
     SubjectID.
 
 -spec get_claims(t()) -> claims().
