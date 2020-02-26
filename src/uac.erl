@@ -88,8 +88,6 @@ authorize_operation(AccessScope, Context) ->
 
 -spec authorize_operation(uac_conf:operation_access_scopes(), context(), domain_name()) ->
     ok | {error, unauthorized}.
-authorize_operation(_, {_, {_, undefined}, _}, _) ->
-    {error, unauthorized};
 authorize_operation(AccessScope, {_, _, Claims}, Domain) ->
     ACL = get_acl(Claims, Domain),
     authorize_operation_(AccessScope, ACL).
