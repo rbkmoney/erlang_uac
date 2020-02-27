@@ -28,10 +28,9 @@
 -type kid()          :: binary().
 -type key()          :: #jose_jwk{}.
 -type token()        :: binary().
--type claims()       :: #{binary() => term()}.
--type subject()      :: {subject_id(), domains() | undefined}.
+-type claims()       :: #{binary() => domains() | term()}.
 -type subject_id()   :: binary().
--type t()            :: {id(), subject(), claims()}.
+-type t()            :: {id(), subject_id(), claims()}.
 -type domain_name()  :: binary().
 -type domains()      :: #{domain_name() => uac_acl:t()}.
 -type expiration()        ::
@@ -41,7 +40,6 @@
 -type id() :: binary().
 
 -export_type([t/0]).
--export_type([subject/0]).
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
