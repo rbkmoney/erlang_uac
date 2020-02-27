@@ -148,8 +148,9 @@ force_expiration_fail_test(_) ->
     _.
 bad_signee_test(_) ->
     ACL = ?TEST_SERVICE_ACL(write),
+    Claims = uac_authorizer_jwt:create_claims(#{}, unlimited, #{?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)}),
     {error, nonexistent_key} =
-        uac_authorizer_jwt:issue(unique_id(), unlimited, {<<"TEST">>, uac_acl:from_list(ACL)}, #{}, random).
+        uac_authorizer_jwt:issue(unique_id(), <<"TEST">>, Claims, random).
 
 %%
 
@@ -189,18 +190,15 @@ unknown_resources_fail_encode_test(_) ->
 
 issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
     PartyID = <<"TEST">>,
-    Claims = #{<<"TEST">> => <<"TEST">>},
-    uac_authorizer_jwt:issue(unique_id(), LifeTime, PartyID, DomainRoles, Claims, test);
+    Claims0 = #{<<"TEST">> => <<"TEST">>},
+    Claims = uac_authorizer_jwt:create_claims(Claims0, LifeTime, DomainRoles),
+    uac_authorizer_jwt:issue(unique_id(), PartyID, Claims, test);
 
 issue_token(ACL, LifeTime) ->
     PartyID = <<"TEST">>,
-    Claims = #{
-        <<"TEST">> => <<"TEST">>,
-        <<"resource_access">> => #{
-            ?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)
-        }
-    },
-    uac_authorizer_jwt:issue(unique_id(), LifeTime, PartyID, Claims, test).
+    Claims0 = #{<<"TEST">> => <<"TEST">>},
+    Claims = uac_authorizer_jwt:create_claims(Claims0, LifeTime, #{?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)}),
+    uac_authorizer_jwt:issue(unique_id(), PartyID, Claims, test).
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{

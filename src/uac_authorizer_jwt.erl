@@ -8,8 +8,7 @@
 % Extend interface to support proper keystore manipulation
 
 -export([configure/1]).
--export([issue/5]).
--export([issue/6]).
+-export([issue/4]).
 -export([verify/2]).
 
 %%
@@ -18,6 +17,7 @@
 -export([get_claims/1]).
 -export([get_claim/2]).
 -export([get_claim/3]).
+-export([create_claims/3]).
 
 %%
 
@@ -28,7 +28,7 @@
 -type kid()          :: binary().
 -type key()          :: #jose_jwk{}.
 -type token()        :: binary().
--type claims()       :: #{binary() => domains() | term()}.
+-type claims()       :: #{binary() => domains() | expiration() | term()}.
 -type subject_id()   :: binary().
 -type t()            :: {id(), subject_id(), claims()}.
 -type domain_name()  :: binary().
@@ -161,27 +161,19 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(id(), expiration(), subject_id(), claims(), keyname()) ->
+-spec issue(id(), subject_id(), claims(), keyname()) ->
     {ok, token()} |
     {error, nonexistent_key} |
     {error, {invalid_signee, Reason :: atom()}}.
 
-issue(JTI, Expiration, SubjectID, Claims, Signee) ->
+issue(JTI, SubjectID, Claims, Signee) ->
     case try_get_key_for_sign(Signee) of
         {ok, Key} ->
-            FinalClaims = construct_final_claims(SubjectID, Claims#{<<"exp">> => Expiration}, JTI),
+            FinalClaims = construct_final_claims(SubjectID, Claims, JTI),
             sign(Key, FinalClaims);
         {error, Error} ->
             {error, Error}
     end.
-
--spec issue(id(), expiration(), subject_id(), domains(), claims(), keyname()) ->
-    {ok, token()} |
-    {error, nonexistent_key} |
-    {error, {invalid_signee, Reason :: atom()}}.
-
-issue(JTI, Expiration, SubjectID, DomainRoles, Claims, Signee) ->
-    issue(JTI, Expiration, SubjectID, Claims#{<<"resource_access">> => DomainRoles}, Signee).
 
 try_get_key_for_sign(Keyname) ->
     case get_key_by_name(Keyname) of
@@ -328,8 +320,8 @@ check_expiration(_, Exp, Opts) when is_integer(Exp) ->
         _ ->
             throw({invalid_token, expired})
     end;
-check_expiration(C, undefined, _) ->
-    throw({invalid_token, {missing, C}});
+check_expiration(_, undefined, _) ->
+    undefined;
 check_expiration(C, V, _) ->
     throw({invalid_token, {badarg, {C, V}}}).
 
@@ -360,6 +352,14 @@ get_claim(ClaimName, {_Id, _Subject, Claims}) ->
 
 get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
     maps:get(ClaimName, Claims, Default).
+
+-spec create_claims(claims(), expiration(), domains()) -> claims().
+
+create_claims(Claims, Expiration, DomainRoles) ->
+    Claims#{
+        <<"exp">> => Expiration,
+        <<"resource_access">> => DomainRoles
+    }.
 
 %%
 
