@@ -19,7 +19,8 @@
     bad_signee_test/1,
     unknown_resources_ok_test/1,
     unknown_resources_fail_encode_test/1,
-    cant_authorize_without_resource_access/1
+    cant_authorize_without_resource_access/1,
+    no_expiration_claim_allowed/1
 ]).
 
 -type test_case_name()  :: atom().
@@ -49,7 +50,9 @@ all() ->
         bad_signee_test,
         unknown_resources_ok_test,
         unknown_resources_fail_encode_test,
-        cant_authorize_without_resource_access
+        cant_authorize_without_resource_access,
+        no_expiration_claim_allowed
+
     ].
 
 -spec init_per_suite(config()) ->
@@ -85,7 +88,6 @@ end_per_suite(Config) ->
     _.
 successful_auth_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
-    ct:log("Token: ~p", [Token]),
     {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
     ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
 
@@ -186,6 +188,14 @@ cant_authorize_without_resource_access(_) ->
 unknown_resources_fail_encode_test(_) ->
     ACL = [{[different_resource], read}, {[test_resource], write}, {[even_more_different_resource], read}],
     ?assertError({badarg, {resource, _}}, issue_token(ACL, unlimited)).
+
+-spec no_expiration_claim_allowed(config()) ->
+    _.
+no_expiration_claim_allowed(_) ->
+    PartyID = <<"TEST">>,
+    {ok, Token} = uac_authorizer_jwt:issue(unique_id(), PartyID, #{}, test),
+    {ok, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
+
 %%
 
 issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
