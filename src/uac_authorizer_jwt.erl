@@ -320,8 +320,11 @@ check_expiration(_, Exp, Opts) when is_integer(Exp) ->
         _ ->
             throw({invalid_token, expired})
     end;
-check_expiration(_, undefined, _) ->
-    undefined;
+check_expiration(C, undefined, Opts) ->
+    case get_check_expiry(Opts) of
+        {true, _} -> throw({invalid_token, {missing, C}});
+        false     -> undefined
+    end;
 check_expiration(C, V, _) ->
     throw({invalid_token, {badarg, {C, V}}}).
 
