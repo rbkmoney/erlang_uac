@@ -377,7 +377,7 @@ decode_roles(Claims, VerificationOpts) ->
         undefined ->
             Claims;
         ResourceAcceess when is_map(ResourceAcceess) ->
-            Domains = maps:get(domains, VerificationOpts, maps:keys(ResourceAcceess)),
+            Domains = maps:get(domains_to_decode, VerificationOpts, maps:keys(ResourceAcceess)),
             DomainRoles = maps:map(
                 fun(_, #{<<"roles">> := Roles}) -> uac_acl:decode(Roles) end,
                 maps:with(Domains, ResourceAcceess)

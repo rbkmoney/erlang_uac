@@ -208,7 +208,7 @@ configure_processed_domains_test(_) ->
         Domain1 => uac_acl:from_list(ACL),
         Domain2 => uac_acl:from_list(ACL)
     }, unlimited),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{domains => [Domain1]}),
+    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{domains_to_decode => [Domain1]}),
     ok = uac:authorize_operation([], AccessContext, Domain1),
     {error, unauthorized} = uac:authorize_operation([], AccessContext, Domain2).
 
