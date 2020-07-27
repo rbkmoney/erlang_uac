@@ -11,13 +11,13 @@ build('erlang_uac', 'docker-host', finalHook) {
   checkoutRepo()
   loadBuildUtils()
 
-  def pipeErlangService
+  def pipeErlangLib
   runStage('load pipeline') {
     env.JENKINS_LIB = "build_utils/jenkins_lib"
     env.SH_TOOLS = "build_utils/sh"
-    pipeErlangService = load("${env.JENKINS_LIB}/pipeErlangService.groovy")
+    pipeErlangLib = load("${env.JENKINS_LIB}/pipeErlangLib.groovy")
   }
 
-  pipeErlangService.runPipe(false)
+  pipeErlangLib.runPipe(false)
 }
 
