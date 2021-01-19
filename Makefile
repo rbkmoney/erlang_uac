@@ -8,7 +8,8 @@ TEMPLATES_PATH := .
 # Name of the service
 SERVICE_NAME := erlang_uac
 
-BUILD_IMAGE_TAG := e7eb72b7721443d88a948546da815528a96c6de9
+BUILD_IMAGE_NAME := build-erlang
+BUILD_IMAGE_TAG := 1333d0926b203e00c47e4fad7e10d2252a020305
 
 CALL_ANYWHERE := \
 	submodules \
@@ -36,10 +37,10 @@ xref:
 	$(REBAR) xref
 
 lint:
-	elvis rock
+	elvis rock -V
 
 dialyze:
-	$(REBAR) dialyzer
+	$(REBAR) as test dialyzer
 
 start: submodules
 	$(REBAR) run
