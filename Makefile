@@ -14,7 +14,7 @@ BUILD_IMAGE_TAG := 1333d0926b203e00c47e4fad7e10d2252a020305
 CALL_ANYWHERE := \
 	submodules \
 	all compile xref lint dialyze test cover \
-	start clean distclean
+	start clean distclean check_format format
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
@@ -38,6 +38,12 @@ xref:
 
 lint:
 	elvis rock -V
+
+check_format:
+	$(REBAR) fmt -c
+
+format:
+	$(REBAR) fmt -w
 
 dialyze:
 	$(REBAR) as test dialyzer
