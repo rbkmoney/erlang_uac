@@ -93,7 +93,7 @@ end_per_group(_Name, Config) ->
 end_per_testcase(_Name, Config) ->
     Config.
 
-
+-dialyzer({[no_fail_call], illegal_input_test/1}).
 illegal_input_test(_C) ->
     ?assertError({badarg, {scope     , _}}, from_list([{[], read}])),
     ?assertError({badarg, {permission, _}}, from_list([{[invoices], wread}])).
@@ -152,6 +152,7 @@ remove_scopes_test(_C) ->
         )
     ).
 
+-dialyzer({[no_fail_call], match_scope_test/1}).
 match_scope_test(_C) ->
     ACL = from_list([
         {[party], read},

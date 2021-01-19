@@ -161,6 +161,7 @@ bad_signee_test(_) ->
     _.
 unknown_resources_ok_test(_) ->
     ok = uac_conf:configure(#{
+        domain_name => ?TEST_DOMAIN_NAME,
         resource_hierarchy => #{
             different_resource           => #{},
             test_resource                => #{},
@@ -170,6 +171,7 @@ unknown_resources_ok_test(_) ->
     ACL = [{[different_resource], read}, {[test_resource], write}, {[even_more_different_resource], read}],
     {ok, Token} = issue_token(ACL, unlimited),
     ok = uac_conf:configure(#{
+        domain_name => ?TEST_DOMAIN_NAME,
         resource_hierarchy => #{
             test_resource => #{}
         }
@@ -244,7 +246,7 @@ issue_dummy_token(ACL, Config) ->
     JWKPublic = jose_jwk:to_public(GoodJWK),
     {_Module, PublicKey} = JWKPublic#jose_jwk.kty,
     {_PemEntry, Data, _} = public_key:pem_entry_encode('SubjectPublicKeyInfo', PublicKey),
-    KID = base64url:encode(crypto:hash(sha256, Data)),
+    KID = jose_base64url:encode(crypto:hash(sha256, Data)),
     JWT = jose_jwt:sign(BadJWK, #{<<"alg">> => <<"RS256">>, <<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.

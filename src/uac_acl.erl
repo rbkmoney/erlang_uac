@@ -112,7 +112,6 @@ compute_permission_priority(V) ->
     error({badarg, {permission, V}}).
 
 %%
-
 -spec match(known_scope(), t()) ->
     [permission()].
 match(Scope, ACL) when length(Scope) > 0 ->
