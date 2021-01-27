@@ -8,6 +8,7 @@
         stdlib,
         public_key,
         genlib,
+        snowflake,
         jose,
         jsx
     ]},

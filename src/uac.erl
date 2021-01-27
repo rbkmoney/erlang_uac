@@ -19,8 +19,8 @@
 -export([authorize_operation/2]).
 -export([authorize_operation/3]).
 
--type context() :: uac_authorizer_jwt:t().
 -type claims() :: uac_authorizer_jwt:claims().
+-type metadata() :: uac_authorizer_jwt:metadata().
 
 -type configuration() :: #{
     jwt := uac_authorizer_jwt:options(),
@@ -36,7 +36,6 @@
 -type key_type() :: bearer.
 -type domain_name() :: uac_authorizer_jwt:domain_name().
 
--export_type([context/0]).
 -export_type([claims/0]).
 -export_type([verification_opts/0]).
 
@@ -51,7 +50,7 @@ configure(Config) ->
     ok = uac_authorizer_jwt:configure(AuthorizerConfig),
     ok = uac_conf:configure(AccessConfig).
 
--spec authorize_api_key(api_key(), verification_opts()) -> {ok, context()} | {error, Reason :: atom()}.
+-spec authorize_api_key(api_key(), verification_opts()) -> {ok, {claims(), metadata()}} | {error, Reason :: atom()}.
 authorize_api_key(ApiKey, VerificationOpts) ->
     case parse_api_key(ApiKey) of
         {ok, {Type, Credentials}} ->
@@ -70,18 +69,18 @@ parse_api_key(ApiKey) ->
     end.
 
 -spec authorize_api_key(key_type(), uac_authorizer_jwt:token(), verification_opts()) ->
-    {ok, context()} | {error, Reason :: atom()}.
+    {ok, {claims(), metadata()}} | {error, Reason :: atom()}.
 authorize_api_key(bearer, Token, VerificationOpts) ->
     uac_authorizer_jwt:verify(Token, VerificationOpts).
 
 %%
 
--spec authorize_operation(uac_conf:operation_access_scopes(), context()) -> ok | {error, unauthorized}.
-authorize_operation(AccessScope, Context) ->
-    authorize_operation(AccessScope, Context, uac_conf:get_domain_name()).
+-spec authorize_operation(uac_conf:operation_access_scopes(), claims()) -> ok | {error, unauthorized}.
+authorize_operation(AccessScope, Claims) ->
+    authorize_operation(AccessScope, Claims, uac_conf:get_domain_name()).
 
--spec authorize_operation(uac_conf:operation_access_scopes(), context(), domain_name()) -> ok | {error, unauthorized}.
-authorize_operation(AccessScope, {_, _, Claims}, Domain) ->
+-spec authorize_operation(uac_conf:operation_access_scopes(), claims(), domain_name()) -> ok | {error, unauthorized}.
+authorize_operation(AccessScope, Claims, Domain) ->
     ACL = get_acl(Claims, Domain),
     authorize_operation_(AccessScope, ACL).
 

@@ -62,8 +62,15 @@ init_per_suite(Config) ->
     uac:configure(#{
         jwt => #{
             keyset => #{
-                test => {pem_file, get_keysource("keys/local/private.pem", Config)}
-            }
+                test => #{
+                    source => {pem_file, get_keysource("keys/local/private.pem", Config)},
+                    metadata => #{
+                        auth_method => user_session_token,
+                        user_realm => <<"external">>
+                    }
+                }
+            },
+            signee => test
         },
         access => #{
             domain_name => ?TEST_DOMAIN_NAME,
@@ -83,8 +90,8 @@ end_per_suite(Config) ->
 -spec successful_auth_test(config()) -> _.
 successful_auth_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), unlimited),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), Claims).
 
 -spec multiple_domain_successful_auth_test(config()) -> _.
 multiple_domain_successful_auth_test(_) ->
@@ -99,11 +106,11 @@ multiple_domain_successful_auth_test(_) ->
         },
         unlimited
     ),
-    {ok, AccessContext1} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(ACL1, AccessContext1, Domain1),
+    {ok, {Claims1, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(ACL1, Claims1, Domain1),
 
-    {ok, AccessContext2} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(ACL2, AccessContext2, Domain2).
+    {ok, {Claims2, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(ACL2, Claims2, Domain2).
 
 -spec invalid_permissions_test(config()) -> _.
 invalid_permissions_test(_) ->
@@ -111,8 +118,8 @@ invalid_permissions_test(_) ->
         [{[test_resource], read}, {{unknown, <<"other_test">>}, write}],
         unlimited
     ),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    {error, _} = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    {error, _} = uac:authorize_operation(?TEST_SERVICE_ACL(write), Claims).
 
 -spec bad_token_test(config()) -> _.
 bad_token_test(Config) ->
@@ -127,8 +134,8 @@ no_token_test(_) ->
 -spec force_expiration_test(config()) -> _.
 force_expiration_test(_) ->
     {ok, Token} = issue_token(?TEST_SERVICE_ACL(write), {deadline, 1}),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), Claims).
 
 -spec force_expiration_fail_test(config()) -> _.
 force_expiration_fail_test(_) ->
@@ -139,8 +146,8 @@ force_expiration_fail_test(_) ->
 bad_signee_test(_) ->
     ACL = ?TEST_SERVICE_ACL(write),
     Claims = uac_authorizer_jwt:create_claims(#{}, unlimited, #{?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)}),
-    {error, nonexistent_key} =
-        uac_authorizer_jwt:issue(unique_id(), <<"TEST">>, Claims, random).
+    {error, {nonexistent_key, _}} =
+        uac_authorizer_jwt:issue(random, Claims).
 
 %%
 
@@ -162,14 +169,14 @@ unknown_resources_ok_test(_) ->
             test_resource => #{}
         }
     }),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), AccessContext).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    ok = uac:authorize_operation(?TEST_SERVICE_ACL(write), Claims).
 
 -spec cant_authorize_without_resource_access(config()) -> _.
 cant_authorize_without_resource_access(_) ->
     {ok, Token} = issue_token(#{}, unlimited),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
-    {error, unauthorized} = uac:authorize_operation([], AccessContext).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}),
+    {error, unauthorized} = uac:authorize_operation([], Claims).
 
 -spec unknown_resources_fail_encode_test(config()) -> _.
 unknown_resources_fail_encode_test(_) ->
@@ -178,8 +185,8 @@ unknown_resources_fail_encode_test(_) ->
 
 -spec no_expiration_claim_allowed(config()) -> _.
 no_expiration_claim_allowed(_) ->
-    PartyID = <<"TEST">>,
-    {ok, Token} = uac_authorizer_jwt:issue(unique_id(), PartyID, #{}, test),
+    Claims = uac_authorizer_jwt:set_subject_id(<<"TEST">>, #{}),
+    {ok, Token} = uac_authorizer_jwt:issue(Claims),
     {ok, _} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{}).
 
 -spec configure_processed_domains_test(config()) -> _.
@@ -194,22 +201,22 @@ configure_processed_domains_test(_) ->
         },
         unlimited
     ),
-    {ok, AccessContext} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{domains_to_decode => [Domain1]}),
-    ok = uac:authorize_operation([], AccessContext, Domain1),
-    {error, unauthorized} = uac:authorize_operation([], AccessContext, Domain2).
+    {ok, {Claims, _}} = uac:authorize_api_key(<<"Bearer ", Token/binary>>, #{domains_to_decode => [Domain1]}),
+    ok = uac:authorize_operation([], Claims, Domain1),
+    {error, unauthorized} = uac:authorize_operation([], Claims, Domain2).
 
 %%
 
 issue_token(DomainRoles, LifeTime) when is_map(DomainRoles) ->
-    PartyID = <<"TEST">>,
     Claims0 = #{<<"TEST">> => <<"TEST">>},
-    Claims = uac_authorizer_jwt:create_claims(Claims0, LifeTime, DomainRoles),
-    uac_authorizer_jwt:issue(unique_id(), PartyID, Claims, test);
+    Claims1 = uac_authorizer_jwt:create_claims(Claims0, LifeTime, DomainRoles),
+    Claims2 = uac_authorizer_jwt:set_subject_id(<<"TEST">>, Claims1),
+    uac_authorizer_jwt:issue(Claims2);
 issue_token(ACL, LifeTime) ->
-    PartyID = <<"TEST">>,
     Claims0 = #{<<"TEST">> => <<"TEST">>},
-    Claims = uac_authorizer_jwt:create_claims(Claims0, LifeTime, #{?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)}),
-    uac_authorizer_jwt:issue(unique_id(), PartyID, Claims, test).
+    Claims1 = uac_authorizer_jwt:create_claims(Claims0, LifeTime, #{?TEST_DOMAIN_NAME => uac_acl:from_list(ACL)}),
+    Claims2 = uac_authorizer_jwt:set_subject_id(<<"TEST">>, Claims1),
+    uac_authorizer_jwt:issue(Claims2).
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{
