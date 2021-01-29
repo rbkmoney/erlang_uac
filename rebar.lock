@@ -4,11 +4,7 @@
        {ref,"4565a8d73f34a0b78cca32c9cd2b97d298bdadf8"}},
   0},
  {<<"jose">>,{pkg,<<"jose">>,<<"1.11.1">>},0},
- {<<"jsx">>,{pkg,<<"jsx">>,<<"3.0.0">>},0},
- {<<"snowflake">>,
-  {git,"https://github.com/rbkmoney/snowflake.git",
-       {ref,"de159486ef40cec67074afe71882bdc7f7deab72"}},
-  0}]}.
+ {<<"jsx">>,{pkg,<<"jsx">>,<<"3.0.0">>},0}]}.
 [
 {pkg_hash,[
  {<<"jose">>, <<"59DA64010C69AAD6CDE2F5B9248B896B84472E99BD18F246085B7B9FE435DCDB">>},
