@@ -22,7 +22,6 @@
 -export([get_claims/1]).
 -export([get_claim/2]).
 -export([get_claim/3]).
--export([set_claim/3]).
 -export([create_claims/3]).
 
 %%
@@ -37,7 +36,8 @@
 -type claim() :: domains() | expiration() | term().
 -type claims() :: #{binary() => claim()}.
 -type subject_id() :: binary().
--type t() :: {id(), subject_id(), claims(), metadata()}.
+-type t(T) :: {id(), subject_id(), claims(), metadata(T)}.
+-type t() :: t(any()).
 -type domain_name() :: binary().
 -type domains() :: #{domain_name() => uac_acl:t()}.
 -type expiration() ::
@@ -46,23 +46,18 @@
     | unlimited.
 
 -type id() :: binary().
--type realm() :: binary().
--type auth_method() ::
-    user_session_token.
 
--type metadata() :: #{
-    auth_method => auth_method(),
-    user_realm => realm()
-}.
+-type metadata(T) :: T.
+-type metadata() :: any().
 
 -export_type([t/0]).
+-export_type([t/1]).
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
 -export_type([domain_name/0]).
 -export_type([domains/0]).
--export_type([auth_method/0]).
--export_type([metadata/0]).
+-export_type([metadata/1]).
 
 -define(CLAIM_TOKEN_ID, <<"jti">>).
 -define(CLAIM_SUBJECT_ID, <<"sub">>).
@@ -119,19 +114,10 @@ parse_options(Options) ->
     Keyset = maps:get(keyset, Options, #{}),
     _ = is_map(Keyset) orelse exit({invalid_option, keyset, Keyset}),
     _ = genlib_map:foreach(
-        fun(KeyName, KeyOpts = #{source := Source}) ->
-            Metadata = maps:get(metadata, KeyOpts),
-            AuthMethod = maps:get(auth_method, Metadata, undefined),
-            UserRealm = maps:get(user_realm, Metadata, <<>>),
+        fun(KeyName, #{source := Source}) ->
             _ =
                 is_keysource(Source) orelse
-                    exit({invalid_source, KeyName, Source}),
-            _ =
-                is_auth_method(AuthMethod) orelse
-                    exit({invalid_auth_method, KeyName, AuthMethod}),
-            _ =
-                is_binary(UserRealm) orelse
-                    exit({invalid_user_realm, KeyName, AuthMethod})
+                    exit({invalid_source, KeyName, Source})
         end,
         Keyset
     ),
@@ -140,13 +126,6 @@ parse_options(Options) ->
 is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
 is_keysource(_) ->
-    false.
-
-is_auth_method(user_session_token) ->
-    true;
-is_auth_method(undefined) ->
-    true;
-is_auth_method(_) ->
     false.
 
 ensure_store_key(Keyname, KeyOpts) ->
@@ -425,11 +404,7 @@ get_subject_email(T) ->
 -spec set_subject_email(binary(), claims()) -> claims().
 set_subject_email(SubjectID, Claims) ->
     false = maps:is_key(?CLAIM_SUBJECT_EMAIL, Claims),
-    set_claim(?CLAIM_SUBJECT_EMAIL, SubjectID, Claims).
-
--spec set_claim(binary(), claim(), claims()) -> claims().
-set_claim(ClaimName, Claim, Claims) ->
-    Claims#{ClaimName => Claim}.
+    Claims#{?CLAIM_SUBJECT_EMAIL => SubjectID}.
 
 %%
 
