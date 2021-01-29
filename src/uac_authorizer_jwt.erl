@@ -30,7 +30,7 @@
 -type token() :: binary().
 -type claims() :: #{binary() => domains() | expiration() | term()}.
 -type subject_id() :: binary().
--type t() :: {id(), subject_id(), claims()}.
+-type t() :: {id(), subject_id(), claims(), metadata()}.
 -type domain_name() :: binary().
 -type domains() :: #{domain_name() => uac_acl:t()}.
 -type expiration() ::
@@ -39,6 +39,13 @@
     | unlimited.
 
 -type id() :: binary().
+-type realm() :: binary().
+-type auth_method() ::
+    user_session_token.
+-type metadata() :: #{
+    auth_method => auth_method(),
+    user_realm => realm()
+}.
 
 -export_type([t/0]).
 -export_type([claims/0]).
@@ -46,7 +53,8 @@
 -export_type([expiration/0]).
 -export_type([domain_name/0]).
 -export_type([domains/0]).
-
+-export_type([auth_method/0]).
+-export_type([metadata/0]).
 %%
 
 -type options() :: #{
@@ -58,7 +66,12 @@
 -export_type([options/0]).
 
 -type keyset() :: #{
-    keyname() => keysource()
+    keyname() => key_opts()
+}.
+
+-type key_opts() :: #{
+    source := keysource(),
+    metadata => metadata()
 }.
 
 -type keysource() ::
@@ -91,8 +104,19 @@ parse_options(Options) ->
     Keyset = maps:get(keyset, Options, #{}),
     _ = is_map(Keyset) orelse exit({invalid_option, keyset, Keyset}),
     _ = genlib_map:foreach(
-        fun(K, V) ->
-            is_keysource(V) orelse exit({invalid_option, K, V})
+        fun(KeyName, KeyOpts = #{source := Source}) ->
+            Metadata = maps:get(metadata, KeyOpts),
+            AuthMethod = maps:get(auth_method, Metadata, undefined),
+            UserRealm = maps:get(user_realm, Metadata, <<>>),
+            _ =
+                is_keysource(Source) orelse
+                    exit({invalid_source, KeyName, Source}),
+            _ =
+                is_auth_method(AuthMethod) orelse
+                    exit({invalid_auth_method, KeyName, AuthMethod}),
+            _ =
+                is_binary(UserRealm) orelse
+                    exit({invalid_user_realm, KeyName, AuthMethod})
         end,
         Keyset
     ),
@@ -103,8 +127,17 @@ is_keysource({pem_file, Fn}) ->
 is_keysource(_) ->
     false.
 
-ensure_store_key(Keyname, Source) ->
-    case store_key(Keyname, Source) of
+is_auth_method(user_session_token) ->
+    true;
+is_auth_method(undefined) ->
+    true;
+is_auth_method(_) ->
+    false.
+
+ensure_store_key(Keyname, KeyOpts) ->
+    Source = maps:get(source, KeyOpts),
+    Metadata = maps:get(metadata, KeyOpts, #{}),
+    case store_key(Keyname, Source, Metadata) of
         ok ->
             ok;
         {error, Reason} ->
@@ -113,9 +146,10 @@ ensure_store_key(Keyname, Source) ->
 
 %%
 
--spec store_key(keyname(), {pem_file, file:filename()}) -> ok | {error, file:posix() | {unknown_key, _}}.
-store_key(Keyname, {pem_file, Filename}) ->
-    store_key(Keyname, {pem_file, Filename}, #{
+-spec store_key(keyname(), {pem_file, file:filename()}, metadata()) ->
+    ok | {error, file:posix() | {unknown_key, _}}.
+store_key(Keyname, {pem_file, Filename}, Metadata) ->
+    store_key(Keyname, {pem_file, Filename}, Metadata, #{
         kid => fun derive_kid_from_public_key_pem_entry/1
     }).
 
@@ -129,12 +163,13 @@ derive_kid_from_public_key_pem_entry(JWK) ->
     kid => fun((key()) -> kid())
 }.
 
--spec store_key(keyname(), {pem_file, file:filename()}, store_opts()) -> ok | {error, file:posix() | {unknown_key, _}}.
-store_key(Keyname, {pem_file, Filename}, Opts) ->
+-spec store_key(keyname(), {pem_file, file:filename()}, metadata(), store_opts()) ->
+    ok | {error, file:posix() | {unknown_key, _}}.
+store_key(Keyname, {pem_file, Filename}, Metadata, Opts) ->
     case jose_jwk:from_pem_file(Filename) of
         JWK = #jose_jwk{} ->
             Key = construct_key(derive_kid(JWK, Opts), JWK),
-            ok = insert_key(Keyname, Key);
+            ok = insert_key(Keyname, Key#{metadata => Metadata});
         Error = {error, _} ->
             Error
     end.
@@ -250,18 +285,18 @@ verify(Token, VerificationOpts) ->
 
 verify(KID, Alg, ExpandedToken, VerificationOpts) ->
     case get_key_by_kid(KID) of
-        #{jwk := JWK, verifier := Algs} ->
+        #{jwk := JWK, verifier := Algs, metadata := Metadata} ->
             _ = lists:member(Alg, Algs) orelse throw({invalid_operation, Alg}),
-            verify(JWK, ExpandedToken, VerificationOpts);
+            verify_with_key(JWK, ExpandedToken, VerificationOpts, Metadata);
         undefined ->
             {error, {nonexistent_key, KID}}
     end.
 
-verify(JWK, ExpandedToken, VerificationOpts) ->
+verify_with_key(JWK, ExpandedToken, VerificationOpts, Metadata) ->
     case jose_jwt:verify(JWK, ExpandedToken) of
         {true, #jose_jwt{fields = Claims}, _JWS} ->
             {KeyMeta, Claims1} = validate_claims(Claims, VerificationOpts),
-            get_result(KeyMeta, Claims1, VerificationOpts);
+            get_result(KeyMeta, Claims1, VerificationOpts, Metadata);
         {false, _JWT, _JWS} ->
             {error, invalid_signature}
     end.
@@ -275,10 +310,10 @@ validate_claims(Claims, [{Name, Claim, Validator} | Rest], VerificationOpts, Acc
 validate_claims(Claims, [], _, Acc) ->
     {Acc, Claims}.
 
-get_result(KeyMeta, Claims, VerificationOpts) ->
+get_result(KeyMeta, Claims, VerificationOpts, Metadata) ->
     #{token_id := TokenID, subject_id := SubjectID} = KeyMeta,
     try
-        {ok, {TokenID, SubjectID, decode_roles(Claims, VerificationOpts)}}
+        {ok, {TokenID, SubjectID, decode_roles(Claims, VerificationOpts), Metadata}}
     catch
         error:{badarg, _} = Reason ->
             throw({invalid_token, {malformed_acl, Reason}})
@@ -336,19 +371,19 @@ get_check_expiry(Opts) ->
     end.
 
 -spec get_subject_id(t()) -> binary().
-get_subject_id({_Id, SubjectID, _Claims}) ->
+get_subject_id({_Id, SubjectID, _Claims, _Metadata}) ->
     SubjectID.
 
 -spec get_claims(t()) -> claims().
-get_claims({_Id, _Subject, Claims}) ->
+get_claims({_Id, _Subject, Claims, _Metadata}) ->
     Claims.
 
 -spec get_claim(binary(), t()) -> term().
-get_claim(ClaimName, {_Id, _Subject, Claims}) ->
+get_claim(ClaimName, {_Id, _Subject, Claims, _Metadata}) ->
     maps:get(ClaimName, Claims).
 
 -spec get_claim(binary(), t(), term()) -> term().
-get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
+get_claim(ClaimName, {_Id, _Subject, Claims, _Metadata}, Default) ->
     maps:get(ClaimName, Claims, Default).
 
 -spec create_claims(claims(), expiration(), domains()) -> claims().
