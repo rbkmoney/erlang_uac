@@ -16,7 +16,7 @@
 -export([get_token_id/1]).
 -export([get_subject_email/1]).
 -export([set_subject_email/2]).
--export([get_expires_at_claim/1]).
+-export([get_expires_at/1]).
 
 -export([get_subject_id/1]).
 -export([get_claims/1]).
@@ -223,17 +223,17 @@ construct_final_claims(SubjectID, Claims, JTI) ->
     maps:merge(EncodedClaims, Token0).
 
 encode_claim(?CLAIM_EXPIRES_AT, Expiration) ->
-    get_expires_at(Expiration);
+    mk_expires_at(Expiration);
 encode_claim(?CLAIM_ACCESS, DomainRoles) ->
     encode_roles(DomainRoles);
 encode_claim(_, Value) ->
     Value.
 
-get_expires_at({lifetime, Lt}) ->
+mk_expires_at({lifetime, Lt}) ->
     genlib_time:unow() + Lt;
-get_expires_at({deadline, Dl}) ->
+mk_expires_at({deadline, Dl}) ->
     Dl;
-get_expires_at(unlimited) ->
+mk_expires_at(unlimited) ->
     0.
 
 sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
@@ -390,8 +390,8 @@ create_claims(Claims, Expiration, DomainRoles) ->
         ?CLAIM_ACCESS => DomainRoles
     }.
 
--spec get_expires_at_claim(t()) -> expiration().
-get_expires_at_claim({_Id, _Subject, Claims, _Metadata}) ->
+-spec get_expires_at(t()) -> expiration().
+get_expires_at({_Id, _Subject, Claims, _Metadata}) ->
     case maps:get(?CLAIM_EXPIRES_AT, Claims) of
         0 -> unlimited;
         V -> V
