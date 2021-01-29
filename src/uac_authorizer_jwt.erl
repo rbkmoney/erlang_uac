@@ -49,6 +49,7 @@
 -type realm() :: binary().
 -type auth_method() ::
     user_session_token.
+
 -type metadata() :: #{
     auth_method => auth_method(),
     user_realm => realm()
@@ -160,8 +161,7 @@ ensure_store_key(Keyname, KeyOpts) ->
 
 %%
 
--spec store_key(keyname(), {pem_file, file:filename()}, metadata()) ->
-    ok | {error, file:posix() | {unknown_key, _}}.
+-spec store_key(keyname(), {pem_file, file:filename()}, metadata()) -> ok | {error, file:posix() | {unknown_key, _}}.
 store_key(Keyname, {pem_file, Filename}, Metadata) ->
     store_key(Keyname, {pem_file, Filename}, Metadata, #{
         kid => fun derive_kid_from_public_key_pem_entry/1
