@@ -13,10 +13,16 @@
 
 %%
 
+-export([get_token_id/1]).
+-export([get_subject_email/1]).
+-export([set_subject_email/2]).
+-export([get_expires_at_claim/1]).
+
 -export([get_subject_id/1]).
 -export([get_claims/1]).
 -export([get_claim/2]).
 -export([get_claim/3]).
+-export([set_claim/3]).
 -export([create_claims/3]).
 
 %%
@@ -28,7 +34,8 @@
 -type kid() :: binary().
 -type key() :: #jose_jwk{}.
 -type token() :: binary().
--type claims() :: #{binary() => domains() | expiration() | term()}.
+-type claim() :: domains() | expiration() | term().
+-type claims() :: #{binary() => claim()}.
 -type subject_id() :: binary().
 -type t() :: {id(), subject_id(), claims(), metadata()}.
 -type domain_name() :: binary().
@@ -55,6 +62,13 @@
 -export_type([domains/0]).
 -export_type([auth_method/0]).
 -export_type([metadata/0]).
+
+-define(CLAIM_TOKEN_ID, <<"jti">>).
+-define(CLAIM_SUBJECT_ID, <<"sub">>).
+-define(CLAIM_SUBJECT_EMAIL, <<"email">>).
+-define(CLAIM_EXPIRES_AT, <<"exp">>).
+-define(CLAIM_ACCESS, <<"resource_access">>).
+
 %%
 
 -type options() :: #{
@@ -225,13 +239,13 @@ try_get_key_for_sign(Keyname) ->
     end.
 
 construct_final_claims(SubjectID, Claims, JTI) ->
-    Token0 = #{<<"jti">> => JTI, <<"sub">> => SubjectID},
+    Token0 = #{?CLAIM_TOKEN_ID => JTI, ?CLAIM_SUBJECT_ID => SubjectID},
     EncodedClaims = maps:map(fun encode_claim/2, Claims),
     maps:merge(EncodedClaims, Token0).
 
-encode_claim(<<"exp">>, Expiration) ->
+encode_claim(?CLAIM_EXPIRES_AT, Expiration) ->
     get_expires_at(Expiration);
-encode_claim(<<"resource_access">>, DomainRoles) ->
+encode_claim(?CLAIM_ACCESS, DomainRoles) ->
     encode_roles(DomainRoles);
 encode_claim(_, Value) ->
     Value.
@@ -333,9 +347,9 @@ get_alg(#{}) ->
 
 get_validators() ->
     [
-        {token_id, <<"jti">>, fun check_presence/3},
-        {subject_id, <<"sub">>, fun check_presence/3},
-        {expires_at, <<"exp">>, fun check_expiration/3}
+        {token_id, ?CLAIM_TOKEN_ID, fun check_presence/3},
+        {subject_id, ?CLAIM_SUBJECT_ID, fun check_presence/3},
+        {expires_at, ?CLAIM_EXPIRES_AT, fun check_expiration/3}
     ].
 
 check_presence(_, V, _) when is_binary(V) ->
@@ -374,6 +388,10 @@ get_check_expiry(Opts) ->
 get_subject_id({_Id, SubjectID, _Claims, _Metadata}) ->
     SubjectID.
 
+-spec get_token_id(t()) -> binary().
+get_token_id({Id, _SubjectID, _Claims, _Metadata}) ->
+    Id.
+
 -spec get_claims(t()) -> claims().
 get_claims({_Id, _Subject, Claims, _Metadata}) ->
     Claims.
@@ -389,9 +407,29 @@ get_claim(ClaimName, {_Id, _Subject, Claims, _Metadata}, Default) ->
 -spec create_claims(claims(), expiration(), domains()) -> claims().
 create_claims(Claims, Expiration, DomainRoles) ->
     Claims#{
-        <<"exp">> => Expiration,
-        <<"resource_access">> => DomainRoles
+        ?CLAIM_EXPIRES_AT => Expiration,
+        ?CLAIM_ACCESS => DomainRoles
     }.
+
+-spec get_expires_at_claim(t()) -> expiration().
+get_expires_at_claim({_Id, _Subject, Claims, _Metadata}) ->
+    case maps:get(?CLAIM_EXPIRES_AT, Claims) of
+        0 -> unlimited;
+        V -> V
+    end.
+
+-spec get_subject_email(t()) -> binary() | undefined.
+get_subject_email(T) ->
+    get_claim(?CLAIM_SUBJECT_EMAIL, T, undefined).
+
+-spec set_subject_email(binary(), claims()) -> claims().
+set_subject_email(SubjectID, Claims) ->
+    false = maps:is_key(?CLAIM_SUBJECT_EMAIL, Claims),
+    set_claim(?CLAIM_SUBJECT_EMAIL, SubjectID, Claims).
+
+-spec set_claim(binary(), claim(), claims()) -> claims().
+set_claim(ClaimName, Claim, Claims) ->
+    Claims#{ClaimName => Claim}.
 
 %%
 
@@ -402,7 +440,7 @@ encode_roles(_) ->
     #{}.
 
 decode_roles(Claims, VerificationOpts) ->
-    case genlib_map:get(<<"resource_access">>, Claims) of
+    case genlib_map:get(?CLAIM_ACCESS, Claims) of
         undefined ->
             Claims;
         ResourceAcceess when is_map(ResourceAcceess) ->
@@ -413,7 +451,7 @@ decode_roles(Claims, VerificationOpts) ->
                 fun(_, #{<<"roles">> := Roles}) -> uac_acl:decode(Roles) end,
                 maps:with(Domains, ResourceAcceess)
             ),
-            Claims#{<<"resource_access">> => DomainRoles};
+            Claims#{?CLAIM_ACCESS => DomainRoles};
         _ ->
             throw({invalid_token, {invalid, acl}})
     end.
