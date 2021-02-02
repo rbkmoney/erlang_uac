@@ -40,12 +40,7 @@
 -type t() :: t(any()).
 -type domain_name() :: binary().
 -type domains() :: #{domain_name() => uac_acl:t()}.
--type expiration() ::
-    {lifetime, Seconds :: pos_integer()}
-    | {deadline, UnixTs :: pos_integer()}
-    | unlimited.
-
--type expires_at() :: unlimited | integer().
+-type expiration() :: unlimited | integer().
 
 -type id() :: binary().
 
@@ -57,7 +52,6 @@
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
--export_type([expires_at/0]).
 -export_type([domain_name/0]).
 -export_type([domains/0]).
 -export_type([metadata/0]).
@@ -236,12 +230,10 @@ encode_claim(?CLAIM_ACCESS, DomainRoles) ->
 encode_claim(_, Value) ->
     Value.
 
-mk_expires_at({lifetime, Lt}) ->
-    genlib_time:unow() + Lt;
-mk_expires_at({deadline, Dl}) ->
-    Dl;
 mk_expires_at(unlimited) ->
-    0.
+    0;
+mk_expires_at(Dl) ->
+    Dl.
 
 sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
     JWT = jose_jwt:sign(JWK, JWS#{<<"kid">> => KID}, Claims),
@@ -397,7 +389,7 @@ create_claims(Claims, Expiration, DomainRoles) ->
         ?CLAIM_ACCESS => DomainRoles
     }.
 
--spec get_expires_at(t()) -> expires_at().
+-spec get_expires_at(t()) -> expiration().
 get_expires_at({_Id, _Subject, Claims, _Metadata}) ->
     case maps:get(?CLAIM_EXPIRES_AT, Claims) of
         0 -> unlimited;
