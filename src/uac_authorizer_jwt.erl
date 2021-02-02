@@ -45,6 +45,8 @@
     | {deadline, UnixTs :: pos_integer()}
     | unlimited.
 
+-type expires_at() :: unlimited | integer().
+
 -type id() :: binary().
 
 -type metadata(T) :: T.
@@ -55,6 +57,7 @@
 -export_type([claims/0]).
 -export_type([token/0]).
 -export_type([expiration/0]).
+-export_type([expires_at/0]).
 -export_type([domain_name/0]).
 -export_type([domains/0]).
 -export_type([metadata/0]).
@@ -394,7 +397,7 @@ create_claims(Claims, Expiration, DomainRoles) ->
         ?CLAIM_ACCESS => DomainRoles
     }.
 
--spec get_expires_at(t()) -> expiration().
+-spec get_expires_at(t()) -> expires_at().
 get_expires_at({_Id, _Subject, Claims, _Metadata}) ->
     case maps:get(?CLAIM_EXPIRES_AT, Claims) of
         0 -> unlimited;
